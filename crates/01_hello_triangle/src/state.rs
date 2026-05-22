@@ -86,13 +86,20 @@ impl State {
         let surface_format = surface_caps.formats[0];
 
         let config = wgpu::SurfaceConfiguration {
+            // 画面(バックバッファ)のテクスチャをどのような目的・用途で使用するかを指定
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            // 画面のピクセルデータの色表現フォーマットを指定
             format: surface_format,
+            // 画面のテクスチャサイズを指定
             width: size.width,
             height: size.height,
+            // 画面への描画更新タイミング(垂直同期:VSyncの挙動)を制御する
             present_mode: wgpu::PresentMode::Fifo,
+            // ウィンドウの背景と、wgpuの描画内容をどのようにαブレンドするかを指定
             alpha_mode: surface_caps.alpha_modes[0],
+            // 画面のテクスチャからテクスチャビューを作成する際に、元のフォーマットと異なるフォーマットして解釈することを許可するリスト
             view_formats: vec![],
+            // GPUが処理を開始してから、実際に画面に表示されるまでにキューに溜めることができる最大フレーム数を指定
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
@@ -111,7 +118,9 @@ impl State {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
+                // パイプラインにバインドする`BindGroupLayout`の配列を、バインドのグループのインデックス`@group(n)`順に並べたもの
                 bind_group_layouts: &[],
+                // プッシュ定数に相当するデータを格納するための即時利用メモリのサイズを指定
                 immediate_size: 0,
             });
 
@@ -120,43 +129,77 @@ impl State {
         // ─────────────────────────────────────────────────────────────
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
+            // シェーダーがどのバインドグループを使用するかの設計図を紐づける
             layout: Some(&render_pipeline_layout),
 
+            // 頂点シェーダーの状態 
+            // GPUがポリゴンの書くを計算するフェーズの設定。
             vertex: wgpu::VertexState {
+                // コンパイル済みのシェーダーソースを指定
                 module: &shader,
+                // WGSLシェーダー内で、頂点処理の開始位置となる関数名を指定
                 entry_point: Some("vs_main"),
+                // 頂点バッファのメモリレイアウトを定義
                 buffers: &[],
+                // シェーダーコンパイル時の詳細オプション
                 compilation_options: Default::default(),
             },
 
+            // ピクセルシェーダーの状態
+            // ポリゴンの内側を塗りつぶすフェーズの設定。
             fragment: Some(wgpu::FragmentState {
+                // 頂点と同様
                 module: &shader,
                 entry_point: Some("fs_main"),
+                // 描画先となるカラーバッファへの出力ルールを、ターゲットごとに配列で指定
                 targets: &[Some(wgpu::ColorTargetState {
+                    // 上の`SurfaceConfigration`で設定した画面の色形式と厳密に一致させる必要がある
                     format: config.format,
+                    // 色の混色設定。`REPLACE`は完全に上書きする。
                     blend: Some(wgpu::BlendState::REPLACE),
+                    // RGBAの度の成分に書き込みを許可するか。ALLはRGBA全て
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: Default::default(),
             }),
 
+            // トポロジーとカリング
+            // 頂点シェーダーが計算したバラバラの点を、どのように形として組み立てるかを指定する。
             primitive: wgpu::PrimitiveState {
+                // 頂点をどう繋ぎ合わせるかを指定
                 topology: wgpu::PrimitiveTopology::TriangleList,
+                // topologyがStrip系の場合に、頂点インデックスの区切り方を指定するもの
                 strip_index_format: None,
+                // 三角形wの表をどちら向きにするかを決定する
+                // Ccw: 画面上で頂点が半時計周りに並んでいる方を表と見なす (グラフィックス界の標準)
+                // Cw: 時計回りを表と見なす
                 front_face: wgpu::FrontFace::Ccw,
+                // カメラに映らない「裏を向ているポリゴン」を描画スキップ(カリング)するかどうかを設定する
                 cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
 
+            // 深度・ステンシル設定
+            // 3D空間の前後関係を正しく行うための深度バッファと、特定の計上で描画を切り抜くステンシルバッファの設定
+            // Nodeは後から描画したものが手前に上書きされる挙動になる
             depth_stencil: None,
 
+            // ポリゴンの輪郭のギザギザ(ジャギー)を滑らかにするMSAAの設定
             multisample: wgpu::MultisampleState {
+                // 1ピクセル当たり何回サンプリングするかを指定する。
+                // 1: 無効
+                // 4: 4x MSAA
                 count: 1,
+                // サンプリングする位置をビットマスクで制御する。すべてのサンプルを有効にする場合は`!0`や`1`(countが1の場合)を指定する
                 mask: 1,
+                // フラグメントシェーダーが出力したアルファ値に応じて、MSAAのサンプル数を動的に変化させる特殊hな透過技術
+                // 髪の毛や草木の葉など、半透明テクスチャの輪郭をきれいに描画したい場合にtrueにする
                 alpha_to_coverage_enabled: false,
             },
 
+            // VRの左右の目用など、1回の描画コールで複数のレイヤーへ同時にレンダリングを行うマルチビューレンダリングの有効化マスク
             multiview_mask: None,
+            // パイプラインのコンパイル結果をキャッシュして次回の起動を高速化するための仕組みを指定する
             cache: None,
         });
 
@@ -192,23 +235,38 @@ impl State {
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
+                
+                // 描画先となるカラーテクスチャに関する設定の配列
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    // 実際に書き込む対象となるテクスチャのビューを指定する
                     view: &view,
+                    // アンチエイリアスを使用している場合に、マルチサンプルされたデータを通常のテクスチャへと短縮・結合する出力先を指定する
                     resolve_target: None,
+                    // 3Dテクスチャやテクスチャ配列の特定の層に対して直接レンダリングを行う際、そのインデックスを指定する
                     depth_slice: None,
+                    // このレンダーパスの 「開始時（Load）」と「終了時（Store）」に、GPUのメモリに対してどのような操作を行うかを定義する
                     ops: wgpu::Operations {
+                        // 描画を始める前に、画面全体を指定した色で塗りつぶしてリセットする
+                        // LoadOp::Load: 前のフレーム（または前のパス）で描画された内容をそのままメモリに残した状態で描画を開始する
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 1.0,
                             g: 1.0,
                             b: 1.0,
                             a: 1.0,
                         }),
+                        // 
                         store: wgpu::StoreOp::Store,
                     },
                 })],
+
+                // 深度テストやステンシルテストを行うための「深度バッファテクスチャ」への接続設定
                 depth_stencil_attachment: None,
+                // このレンダーパスの「開始時」と「終了時」に、GPU後むスタンプをクエリセットに書きもうための設定
                 timestamp_writes: None,
+                // 「オクルージョンクエリ(描画した物体が、他の物体に隠されずに実際に何ピクセル画面に描画されたか)」の結果を格納するセットを指定する。
+                // 主に画面外や遮蔽物の後ろに隠れて見えないオブジェクトの描画をスキップする最適化技術で使用する。
                 occlusion_query_set: None,
+                // パイプライン側と同様、VR用のマルチビューレンダリングを行う際のレイヤーマスク。
                 multiview_mask: None,
             });
 
