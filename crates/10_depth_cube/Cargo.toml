@@ -1,0 +1,12 @@
+[package]
+name = "depth_cube"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wgpu = { workspace = true }
+bytemuck = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+pollster = { workspace = true }
+winit = { workspace = true }
