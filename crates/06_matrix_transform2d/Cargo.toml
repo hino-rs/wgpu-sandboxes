@@ -10,3 +10,4 @@ env_logger = { workspace = true }
 log = { workspace = true }
 pollster = { workspace = true }
 winit = { workspace = true }
+glam = { version = "0.33.0", features = ["bytemuck"] }
