@@ -1,5 +1,42 @@
 use std::sync::Arc;
 use winit::window::Window;
+use wgpu::util::DeviceExt;
+
+// 頂点データの中身 (3点分)
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
+    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+];
+
+// 頂点構造体
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex {
+    // アトリビュート (x, y, z)と(r, g, b)
+    position: [f32; 3],
+    color: [f32; 3], 
+}
+
+impl Vertex {
+    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+        use std::mem;
+
+        const ATTRIBUTES: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
+            0 => Float32x3, // shader_location(0) に f32 x 3 (position)
+            1 => Float32x3, // shader_location(1) に f32 x 3 (color)
+        ];
+
+        wgpu::VertexBufferLayout {
+            // 1つの頂点データが何バイトか (GPUが次の頂点に進むための幅)
+            array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
+            // 描画データが進むタイミング (頂点ごとに次のデータに進む)
+            step_mode: wgpu::VertexStepMode::Vertex,
+            // 頂点アトリビュート (位置座標と色)の構成
+            attributes: ATTRIBUTES,
+        }
+    }
+}
 
 // GPU描画に必要な状態をまとめた構造体
 pub struct State {
@@ -13,6 +50,10 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     // 頂点シェーダー
     render_pipeline: wgpu::RenderPipeline,
+    // 頂点バッファの実態
+    vertex_buffer: wgpu::Buffer,
+    // 頂点の個数
+    num_vertices: u32,
 }
 
 impl State {
@@ -140,7 +181,9 @@ impl State {
                 // WGSLシェーダー内で、頂点処理の開始位置となる関数名を指定
                 entry_point: Some("vs_main"),
                 // 頂点バッファのメモリレイアウトを定義
-                buffers: &[],
+                buffers: &[
+                    Vertex::desc(), // 頂点バッファのレイアウトを登録
+                ],
                 // シェーダーコンパイル時の詳細オプション
                 compilation_options: Default::default(),
             },
@@ -203,12 +246,26 @@ impl State {
             cache: None,
         });
 
+        // ─────────────────────────────────────────────────────────────
+        // 頂点バッファの作成
+        // ─────────────────────────────────────────────────────────────
+        let vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vetex Buffer"),
+                contents: bytemuck::cast_slice(VERTICES),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+        let num_vertices = VERTICES.len() as u32;
+
         Self {
             surface,
             device,
             queue,
             config,
             render_pipeline,
+            vertex_buffer,
+            num_vertices,
         }
     }
 
@@ -271,7 +328,11 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw(0..3, 0..1);
+
+            // 頂点バッファをスロット0に割り当てる
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+
+            render_pass.draw(0..self.num_vertices, 0..1);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
