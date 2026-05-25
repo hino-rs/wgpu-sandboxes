@@ -374,6 +374,39 @@ impl State {
         state
     }
 
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.config.width = new_size.width;
+            self.config.height = new_size.height;
+            self.surface.configure(&self.device, &self.config);
+        }
+    }
+
+    pub fn reset_cells(&mut self) {
+        let mut cells = vec![Cell::Empty; 64];
+
+        for y in 0..8 {
+            for x in 0..8 {
+                if y % 2 == 0 {
+                    if x % 2 == 0 {
+                        cells[y*8 + x] = Cell::Black;
+                    } else {
+                        cells[y*8 + x] = Cell::White;
+                    }
+                } else {
+                    if x % 2 == 0 {
+                        cells[y*8 + x] = Cell::White;
+                    } else {
+                        cells[y*8 + x] = Cell::Black;
+                    }
+                }
+            }
+        }
+
+        self.cells = cells;
+        self.update_instances();
+    }
+
     pub fn handle_mouse_click(&mut self, button_state: winit::event::ElementState) {
         if button_state == winit::event::ElementState::Pressed {
             let width = self.config.width as f32;

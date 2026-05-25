@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
+use winit::{application::ApplicationHandler, event::{KeyEvent, WindowEvent}, event_loop::ActiveEventLoop, keyboard::{KeyCode, PhysicalKey}, window::{Window, WindowId}};
 
 use crate::state::State;
 
@@ -25,8 +25,26 @@ impl ApplicationHandler for App {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
+            WindowEvent::Resized(physical_size) => {
+                if let Some(state) = &mut self.state {
+                    state.resize(physical_size);
+                }
+            }
+
             WindowEvent::CloseRequested => {
                 event_loop.exit();
+            }
+
+            WindowEvent::KeyboardInput { event, .. } => {
+                let KeyEvent { physical_key, .. } = event;
+                match physical_key {
+                    PhysicalKey::Code(KeyCode::Space) => {
+                        if let Some(state) = &mut self.state {
+                            state.reset_cells();
+                        }
+                    }
+                    _ => {}
+                }
             }
 
             WindowEvent::RedrawRequested => {
