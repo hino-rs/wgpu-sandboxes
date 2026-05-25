@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use winit::window::Window;
 use wgpu::util::DeviceExt;
+use crate::cells::*;
 
 // 2つの三角形で四角形（スクエア）を構成
 const VERTICES: &[Vertex] = &[
@@ -14,12 +15,6 @@ const VERTICES: &[Vertex] = &[
     Vertex { position: [-0.5, 0.5, 0.0], color: [1.0, 1.0, 1.0] },
 ];
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Cell {
-    Empty,
-    Black,
-    White,
-}
 
 // 頂点構造体
 #[repr(C)]
@@ -35,6 +30,7 @@ pub struct Vertex {
 struct InstanceRaw {
     position: [f32; 3],
     color: [f32; 3],
+    scale: f32,
 }
 
 impl InstanceRaw {
@@ -53,6 +49,11 @@ impl InstanceRaw {
                     offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 3,
                     format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: (mem::size_of::<[f32; 3]>() * 2) as wgpu::BufferAddress,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32,
                 },
             ],
         }
@@ -309,21 +310,21 @@ impl State {
         // ─────────────────────────────────────────────────────────────
         // 盤面の作成
         // ─────────────────────────────────────────────────────────────
-        let mut cells = vec![Cell::Empty; 64];
+        let mut cells = vec![Cell::Empty; GRID_SIZE];
 
-        for y in 0..8 {
-            for x in 0..8 {
+        for y in 0..NUM_GRID_PER_ROW {
+            for x in 0..NUM_GRID_PER_ROW {
                 if y % 2 == 0 {
                     if x % 2 == 0 {
-                        cells[y*8 + x] = Cell::Black;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::Black;
                     } else {
-                        cells[y*8 + x] = Cell::White;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::White;
                     }
                 } else {
                     if x % 2 == 0 {
-                        cells[y*8 + x] = Cell::White;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::White;
                     } else {
-                        cells[y*8 + x] = Cell::Black;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::Black;
                     }
                 }
             }
@@ -332,9 +333,9 @@ impl State {
         // ─────────────────────────────────────────────────────────────
         // インスタンスバッファの作成
         // ─────────────────────────────────────────────────────────────
-        let num_instances_per_row = 8;
+        let num_instances_per_row = NUM_GRID_PER_ROW;
         let num_instances = (num_instances_per_row * num_instances_per_row) as u32;
-        let instances = vec![InstanceRaw { position: [0.0, 0.0, 0.0], color: [0.0, 0.0, 0.0] }; 64];
+        let instances = vec![InstanceRaw { position: [0.0, 0.0, 0.0], color: [0.0, 0.0, 0.0], scale: 1.0 }; GRID_SIZE];
 
         // for y in 0..num_instances_per_row {
         //     for x in 0..num_instances_per_row {
@@ -383,21 +384,21 @@ impl State {
     }
 
     pub fn reset_cells(&mut self) {
-        let mut cells = vec![Cell::Empty; 64];
+        let mut cells = vec![Cell::Empty; GRID_SIZE];
 
-        for y in 0..8 {
-            for x in 0..8 {
+        for y in 0..NUM_GRID_PER_ROW {
+            for x in 0..NUM_GRID_PER_ROW {
                 if y % 2 == 0 {
                     if x % 2 == 0 {
-                        cells[y*8 + x] = Cell::Black;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::Black;
                     } else {
-                        cells[y*8 + x] = Cell::White;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::White;
                     }
                 } else {
                     if x % 2 == 0 {
-                        cells[y*8 + x] = Cell::White;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::White;
                     } else {
-                        cells[y*8 + x] = Cell::Black;
+                        cells[y*NUM_GRID_PER_ROW + x] = Cell::Black;
                     }
                 }
             }
@@ -415,14 +416,14 @@ impl State {
             let ndc_x = (self.cursor_pos.0 / width) * 2.0 - 1.0;
             let ndc_y = 1.0 - (self.cursor_pos.1 / height) * 2.0;
             
-            let x_frac = (ndc_x + 0.8) / 1.6 * 7.0;
-            let y_frac = (ndc_y + 0.8) / 1.6 * 7.0;
+            let x_frac = (ndc_x + 0.8) / 1.6 * (NUM_GRID_PER_ROW - 1) as f32;
+            let y_frac = (ndc_y + 0.8) / 1.6 * (NUM_GRID_PER_ROW - 1) as f32;
 
             let x = x_frac.round() as i32;
             let y = y_frac.round() as i32;
 
-            if x >= 0 && x < 8 && y >= 0 && y < 8 {
-                let idx = (y * 8 + x) as usize;
+            if x >= 0 && x < NUM_GRID_PER_ROW as i32 && y >= 0 && y < NUM_GRID_PER_ROW as i32 {
+                let idx = (y * NUM_GRID_PER_ROW as i32 + x) as usize;
                 self.cells[idx] = match self.cells[idx] {
                     Cell::Empty => Cell::Black,
                     Cell::Black => Cell::White,
@@ -435,12 +436,18 @@ impl State {
     }
 
     pub fn update_instances(&mut self) {
-        let num_instances_per_row = 8;
+        let num_instances_per_row = NUM_GRID_PER_ROW;
         let mut instances = Vec::new();
+        
+        // グリッド全体の幅(1.6)から、セル同士の中心ピッチを計算
+        let cell_pitch = 1.6 / (num_instances_per_row - 1) as f32;
+        // 隙間を10%空けるため、マスのサイズをピッチの0.9倍にする
+        let cell_scale = cell_pitch * GAP;
+        
         for y in 0..num_instances_per_row {
             for x in 0..num_instances_per_row {
-                let x_pos = (x as f32 / (num_instances_per_row - 1) as f32) * 1.6 - 0.8;
-                let y_pos = (y as f32 / (num_instances_per_row - 1) as f32) * 1.6 - 0.8;
+                let x_pos = (x as f32) * cell_pitch - 0.8;
+                let y_pos = (y as f32) * cell_pitch - 0.8;
 
                 let cell = self.cells[y * num_instances_per_row + x];
                 let color = match cell {
@@ -452,6 +459,7 @@ impl State {
                 instances.push(InstanceRaw {
                     position: [x_pos, y_pos, 0.0],
                     color,
+                    scale: cell_scale,
                 });
             }
         }
