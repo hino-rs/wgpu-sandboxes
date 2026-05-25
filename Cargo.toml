@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "lab"]
+members = ["crates/*", "examples/instancing_grid", "lab"]
 
 [workspace.package]
 version = "0.1.0"
