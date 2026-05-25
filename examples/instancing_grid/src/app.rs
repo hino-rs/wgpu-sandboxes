@@ -38,6 +38,18 @@ impl ApplicationHandler for App {
                     window.request_redraw();
                 }
             }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                if let Some(state) = &mut self.state {
+                    state.cursor_pos = (position.x as f32, position.y as f32);
+                }
+            }
+
+            WindowEvent::MouseInput { state: button_state, .. } => {
+                if let Some(state) = &mut self.state {
+                    state.handle_mouse_click(button_state);
+                }
+            }
             
             _ => {}
         }

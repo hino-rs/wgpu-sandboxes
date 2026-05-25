@@ -2,12 +2,24 @@ use std::sync::Arc;
 use winit::window::Window;
 use wgpu::util::DeviceExt;
 
-// 頂点データの中身 (3点分)
+// 2つの三角形で四角形（スクエア）を構成
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
-    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
-    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+    // 三角形1（左下半分）
+    Vertex { position: [-0.5, -0.5, 0.0], color: [1.0, 1.0, 1.0] },
+    Vertex { position: [0.5, -0.5, 0.0], color: [1.0, 1.0, 1.0] },
+    Vertex { position: [-0.5, 0.5, 0.0], color: [1.0, 1.0, 1.0] },
+    // 三角形2（右上半分）
+    Vertex { position: [0.5, -0.5, 0.0], color: [1.0, 1.0, 1.0] },
+    Vertex { position: [0.5, 0.5, 0.0], color: [1.0, 1.0, 1.0] },
+    Vertex { position: [-0.5, 0.5, 0.0], color: [1.0, 1.0, 1.0] },
 ];
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Cell {
+    Empty,
+    Black,
+    White,
+}
 
 // 頂点構造体
 #[repr(C)]
@@ -22,6 +34,7 @@ pub struct Vertex {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct InstanceRaw {
     position: [f32; 3],
+    color: [f32; 3],
 }
 
 impl InstanceRaw {
@@ -34,6 +47,11 @@ impl InstanceRaw {
                 wgpu::VertexAttribute {
                     offset: 0,
                     shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 3,
                     format: wgpu::VertexFormat::Float32x3,
                 },
             ],
@@ -80,6 +98,9 @@ pub struct State {
 
     instance_buffer: wgpu::Buffer,
     num_instances: u32,
+    cells: Vec<Cell>,
+
+    pub cursor_pos: (f32, f32),
 }
 
 impl State {
@@ -286,30 +307,57 @@ impl State {
         let num_vertices = VERTICES.len() as u32;
 
         // ─────────────────────────────────────────────────────────────
+        // 盤面の作成
+        // ─────────────────────────────────────────────────────────────
+        let mut cells = vec![Cell::Empty; 64];
+
+        for y in 0..8 {
+            for x in 0..8 {
+                if y % 2 == 0 {
+                    if x % 2 == 0 {
+                        cells[y*8 + x] = Cell::Black;
+                    } else {
+                        cells[y*8 + x] = Cell::White;
+                    }
+                } else {
+                    if x % 2 == 0 {
+                        cells[y*8 + x] = Cell::White;
+                    } else {
+                        cells[y*8 + x] = Cell::Black;
+                    }
+                }
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
         // インスタンスバッファの作成
         // ─────────────────────────────────────────────────────────────
-        let num_instances_per_row = 10;
-        let mut instances = Vec::new();
-        for y in 0..num_instances_per_row {
-            for x in 0..num_instances_per_row {
-                let x_pos = (x as f32 / (num_instances_per_row - 1) as f32) * 1.7 - 0.85;
-                let y_pos = (y as f32 / (num_instances_per_row - 1) as f32) * 1.7 - 0.85;
-                instances.push(InstanceRaw {
-                    position: [x_pos, y_pos, 0.0],
-                });
-            }
-        };
-        let num_instances = instances.len() as u32;
+        let num_instances_per_row = 8;
+        let num_instances = (num_instances_per_row * num_instances_per_row) as u32;
+        let instances = vec![InstanceRaw { position: [0.0, 0.0, 0.0], color: [0.0, 0.0, 0.0] }; 64];
+
+        // for y in 0..num_instances_per_row {
+        //     for x in 0..num_instances_per_row {
+        //         let x_pos = (x as f32 / (num_instances_per_row - 1) as f32) * 1.7 - 0.85;
+        //         let y_pos = (y as f32 / (num_instances_per_row - 1) as f32) * 1.7 - 0.85;
+        //         instances.push(InstanceRaw {
+        //             position: [x_pos, y_pos, 0.0],
+        //         });
+        //     }
+        // };
+        // let num_instances = instances.len() as u32;
 
         let instance_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Instance Buffer"),
                 contents: bytemuck::cast_slice(&instances),
-                usage: wgpu::BufferUsages::VERTEX,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             }
         );
 
-        Self {
+
+
+        let mut state = Self {
             surface,
             device,
             queue,
@@ -319,7 +367,67 @@ impl State {
             num_vertices,
             instance_buffer,
             num_instances,
+            cells,
+            cursor_pos: (0.0, 0.0),
+        };
+        state.update_instances();
+        state
+    }
+
+    pub fn handle_mouse_click(&mut self, button_state: winit::event::ElementState) {
+        if button_state == winit::event::ElementState::Pressed {
+            let width = self.config.width as f32;
+            let height = self.config.height as f32;
+
+            let ndc_x = (self.cursor_pos.0 / width) * 2.0 - 1.0;
+            let ndc_y = 1.0 - (self.cursor_pos.1 / height) * 2.0;
+            
+            let x_frac = (ndc_x + 0.8) / 1.6 * 7.0;
+            let y_frac = (ndc_y + 0.8) / 1.6 * 7.0;
+
+            let x = x_frac.round() as i32;
+            let y = y_frac.round() as i32;
+
+            if x >= 0 && x < 8 && y >= 0 && y < 8 {
+                let idx = (y * 8 + x) as usize;
+                self.cells[idx] = match self.cells[idx] {
+                    Cell::Empty => Cell::Black,
+                    Cell::Black => Cell::White,
+                    Cell::White => Cell::Empty,
+                };
+
+                self.update_instances();
+            }
         }
+    }
+
+    pub fn update_instances(&mut self) {
+        let num_instances_per_row = 8;
+        let mut instances = Vec::new();
+        for y in 0..num_instances_per_row {
+            for x in 0..num_instances_per_row {
+                let x_pos = (x as f32 / (num_instances_per_row - 1) as f32) * 1.6 - 0.8;
+                let y_pos = (y as f32 / (num_instances_per_row - 1) as f32) * 1.6 - 0.8;
+
+                let cell = self.cells[y * num_instances_per_row + x];
+                let color = match cell {
+                    Cell::Empty => [0.1, 0.5, 0.1],
+                    Cell::Black => [0.05, 0.05, 0.05],
+                    Cell::White => [0.95, 0.95, 0.95],
+                };
+
+                instances.push(InstanceRaw {
+                    position: [x_pos, y_pos, 0.0],
+                    color,
+                });
+            }
+        }
+
+        self.queue.write_buffer(
+            &self.instance_buffer, 
+            0, 
+            bytemuck::cast_slice(&instances),
+        );
     }
 
     pub fn render(&mut self) {
