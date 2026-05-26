@@ -1,5 +1,5 @@
 pub const GAP: f32 = 0.0;
-pub const INITIAL_NUM_GRID_PER_ROW: usize = 32;
+pub const INITIAL_NUM_GRID_PER_ROW: usize = 128;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]

@@ -154,15 +154,11 @@ impl State {
         );
 
         let mut current = board.empty_board();
-        current[12] = Cell::Alive;
-        current[11] = Cell::Alive;
-        current[13] = Cell::Alive;
-        current[02] = Cell::Alive;
-        current[15] = Cell::Alive;
-        current[14] = Cell::Alive;
-        current[7] = Cell::Alive;
-        current[9] = Cell::Alive;
-        current[8] = Cell::Alive;
+        for i in 0..current.len() {
+            if rand::random_bool(0.25) {
+                current[i] = Cell::Alive;
+            }
+        }
         
         let mut state = Self {
             surface,
@@ -190,17 +186,14 @@ impl State {
                 let alive_count = self.board.count_alive_neighbors(&self.current, x, y);
                 let index = self.board.index(x, y);
                 match (alive_count, self.current[index]) {
-                    (4, Cell::Alive) =>  {
-                        self.next[index] = Cell::Dead;
-                    }
                     (3, Cell::Dead) => {
                         self.next[index] = Cell::Alive;
                     }
-                    (1 | 0, Cell::Alive) => {
-                        self.next[index] = Cell::Dead;
+                    (2 | 3, Cell::Alive) => {
+                        self.next[index] = Cell::Alive;
                     }
-                    _ => {
-                        self.next[index] = self.current[index];
+                    (_, _) => {
+                        self.next[index] = Cell::Dead;
                     }
                 }
             }
