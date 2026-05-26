@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "examples/instancing_grid", "lab"]
+members = ["crates/*", "examples/*", "lab", "projects/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,3 +12,4 @@ winit = "0.30.13"
 env_logger = "0.11.10"
 log = "0.4.29"
 pollster = "0.4.0"
+rand = "0.10.1"

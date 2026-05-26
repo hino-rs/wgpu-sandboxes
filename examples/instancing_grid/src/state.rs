@@ -15,7 +15,6 @@ const VERTICES: &[Vertex] = &[
     Vertex { position: [-0.5, 0.5, 0.0], color: [1.0, 1.0, 1.0] },
 ];
 
-
 // 頂点構造体
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -530,6 +529,7 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
