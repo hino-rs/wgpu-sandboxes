@@ -1,16 +1,19 @@
 use std::sync::Arc;
 
+use eframe::egui;
+use egui_wgpu::RendererOptions;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
+use egui_wgpu::Renderer as EguiRenderer;
 
 use crate::shape::*;
 use crate::cell::*;
 
 pub struct State {
     surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     num_vertices: u32,
@@ -19,6 +22,7 @@ pub struct State {
     // board: Board,
     // current: Vec<Cell>,
     // next: Vec<Cell>,
+    pub egui_renderer: EguiRenderer,
 }
 
 impl State {
@@ -156,6 +160,12 @@ impl State {
         //         current[i] = Cell::Alive;
         //     }
         // }
+
+        let egui_renderer = EguiRenderer::new(
+            &device,
+            config.format,
+            RendererOptions::default(),
+        );
         
         Self {
             surface,
@@ -170,11 +180,12 @@ impl State {
             // board,
             // next: current.clone(),
             // current,
+            egui_renderer,
         }
         // state.update_instances();
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated |
@@ -196,6 +207,14 @@ impl State {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
+
+        self.egui_renderer.update_buffers(
+            &self.device, 
+            &self.queue, 
+            &mut encoder, 
+            paint_jobs, 
+            screen_descriptor,
+        );
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -220,6 +239,28 @@ impl State {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.draw(0..self.num_vertices, 0..self.num_instances);
+        }
+
+        // eguiのレンダーパス
+        {
+            let mut egui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load, // 重ね
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None
+            }).forget_lifetime();
+
+            self.egui_renderer.render(&mut egui_pass, paint_jobs, screen_descriptor);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
