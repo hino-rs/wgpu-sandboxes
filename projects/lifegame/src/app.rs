@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 
-use crate::{board::Board, shape::{GAP, INITIAL_NUM_GRID_PER_ROW}, state::State};
+use crate::{board::Board, shape::INITIAL_NUM_GRID_PER_ROW, state::State};
 
 #[derive(Default)]
 pub struct App {
@@ -28,7 +28,7 @@ impl ApplicationHandler for App {
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
         match event {
@@ -42,11 +42,11 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
 
-            WindowEvent::KeyboardInput {
-                device_id,
-                event,
-                is_synthetic,
-            } => {}
+            // WindowEvent::KeyboardInput {
+            //     device_id,
+            //     event,
+            //     is_synthetic,
+            // } => {}
 
             WindowEvent::RedrawRequested => {
                 if let (Some(state), Some(board)) = (&mut self.state, &mut self.board) {
@@ -60,13 +60,13 @@ impl ApplicationHandler for App {
                 }
             }
 
-            WindowEvent::CursorMoved { position, .. } => {}
+            // WindowEvent::CursorMoved { position, .. } => {}
 
-            WindowEvent::MouseInput {
-                device_id,
-                state,
-                button,
-            } => {}
+            // WindowEvent::MouseInput {
+            //     device_id,
+            //     state,
+            //     button,
+            // } => {}
 
             _ => {}
         }

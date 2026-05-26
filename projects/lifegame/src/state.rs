@@ -4,7 +4,6 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use crate::shape::*;
-use crate::board::*;
 use crate::cell::*;
 
 pub struct State {
@@ -158,7 +157,7 @@ impl State {
         //     }
         // }
         
-        let mut state = Self {
+        Self {
             surface,
             device,
             queue,
@@ -171,9 +170,8 @@ impl State {
             // board,
             // next: current.clone(),
             // current,
-        };
+        }
         // state.update_instances();
-        state
     }
 
     pub fn render(&mut self) {
@@ -221,14 +219,14 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.draw(0..self.num_vertices, 0..self.num_instances as u32);
+            render_pass.draw(0..self.num_vertices, 0..self.num_instances);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
     }
 
-    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, gap: f32) {
+    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, _gap: f32) {
         let mut instances = Vec::new();
         
         let cell_pitch = 1.6 / (num_grid_per_row - 1) as f32;

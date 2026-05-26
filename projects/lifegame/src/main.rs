@@ -6,7 +6,6 @@ mod board;
 
 use app::App;
 use winit::event_loop::EventLoop;
-use crate::{board::Board, shape::INITIAL_NUM_GRID_PER_ROW};
 
 fn main() {
     env_logger::init();

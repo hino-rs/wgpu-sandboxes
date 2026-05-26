@@ -8,7 +8,7 @@ use crate::cell::Cell;
 #[derive(Clone)]
 pub struct Board {
     pub num_grid_per_row: usize,
-    pub grid_size: usize,
+    // pub grid_size: usize,
     pub current: Vec<Cell>,
     pub next: Vec<Cell>,
 }
@@ -23,15 +23,15 @@ impl Board {
 
         let mut current = Self::empty_board(grid_size);
 
-        for i in 0..current.len() {
+        for c in &mut current {
             if rand::random_bool(0.25) {
-                current[i] = Cell::Alive;
+                *c = Cell::Alive;
             }
         }
 
         Self {
             num_grid_per_row,
-            grid_size,
+            // grid_size,
             next: current.clone(),
             current,
         }
@@ -45,14 +45,14 @@ impl Board {
         y * self.num_grid_per_row + x
     }
 
-    pub fn unravel_index(&self, index: usize) -> (usize, usize) {
+    pub fn _unravel_index(&self, index: usize) -> (usize, usize) {
         (
             index % self.num_grid_per_row,
             index / self.num_grid_per_row,
         )
     }
 
-    pub fn count_alive_neighbors(&self, current_grid: &Vec<Cell>, x: usize, y: usize) -> usize {
+    pub fn count_alive_neighbors(&self, current_grid: &[Cell], x: usize, y: usize) -> usize {
         let length = self.num_grid_per_row;
         let mut count = 0;
 
