@@ -5,22 +5,40 @@ use crate::cell::Cell;
 //     (-1,  1), (0,  1), (1,  1),
 // ];
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Board {
     pub num_grid_per_row: usize,
     pub grid_size: usize,
+    pub current: Vec<Cell>,
+    pub next: Vec<Cell>,
 }
 
 impl Board {
-    pub fn new(num_grid_per_row: usize) -> Self {
-        Self {
-            num_grid_per_row,
-            grid_size: num_grid_per_row * num_grid_per_row,
-        }
+    pub fn cells(&self) -> &[Cell] {
+        &self.current
     }
 
-    pub fn empty_board(&self) -> Vec<Cell> {
-        vec![Cell::Dead; self.grid_size]
+    pub fn new(num_grid_per_row: usize) -> Self {
+        let grid_size = num_grid_per_row * num_grid_per_row;
+
+        let mut current = Self::empty_board(grid_size);
+
+        for i in 0..current.len() {
+            if rand::random_bool(0.25) {
+                current[i] = Cell::Alive;
+            }
+        }
+
+        Self {
+            num_grid_per_row,
+            grid_size,
+            next: current.clone(),
+            current,
+        }
+    }
+     
+    pub fn empty_board(grid_size: usize) -> Vec<Cell> {
+        vec![Cell::Dead; grid_size]
     }
 
     pub fn index(&self, x: usize, y: usize) -> usize {
@@ -69,5 +87,29 @@ impl Board {
         }
 
         count
+    }
+
+    pub fn update(&mut self) {
+        let width = self.num_grid_per_row;
+
+        for y in 0..width {
+            for x in 0..width {
+                let alive_count = self.count_alive_neighbors(&self.current, x, y);
+                let index = self.index(x, y);
+                match (alive_count, self.current[index]) {
+                    (3, Cell::Dead) => {
+                        self.next[index] = Cell::Alive;
+                    }
+                    (2 | 3, Cell::Alive) => {
+                        self.next[index] = Cell::Alive;
+                    }
+                    (_, _) => {
+                        self.next[index] = Cell::Dead;
+                    }
+                }
+            }
+        }
+
+        std::mem::swap(&mut self.current, &mut self.next);
     }
 }

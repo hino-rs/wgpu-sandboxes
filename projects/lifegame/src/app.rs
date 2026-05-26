@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 
-use crate::state::State;
+use crate::{board::Board, shape::{GAP, INITIAL_NUM_GRID_PER_ROW}, state::State};
 
 #[derive(Default)]
 pub struct App {
     window: Option<Arc<Window>>,
     state: Option<State>,
+    pub board: Option<Board>,
 }
 
 impl ApplicationHandler for App {
@@ -21,6 +22,7 @@ impl ApplicationHandler for App {
         let state = pollster::block_on(State::new(Arc::clone(&window)));
         self.window = Some(window);
         self.state = Some(state);
+        self.board = Some(Board::new(INITIAL_NUM_GRID_PER_ROW));
     }
 
     fn window_event(
@@ -47,8 +49,9 @@ impl ApplicationHandler for App {
             } => {}
 
             WindowEvent::RedrawRequested => {
-                if let Some(state) = &mut self.state {
-                    state.update();
+                if let (Some(state), Some(board)) = (&mut self.state, &mut self.board) {
+                    board.update();
+                    state.update_instances(board.cells(), board.num_grid_per_row, 0.0); // GAP
                     state.render();
                 }
 

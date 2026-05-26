@@ -16,10 +16,10 @@ pub struct State {
     vertex_buffer: wgpu::Buffer,
     num_vertices: u32,
     instance_buffer: wgpu::Buffer,
-    num_instances: usize,
-    board: Board,
-    current: Vec<Cell>,
-    next: Vec<Cell>,
+    num_instances: u32,
+    // board: Board,
+    // current: Vec<Cell>,
+    // next: Vec<Cell>,
 }
 
 impl State {
@@ -139,11 +139,9 @@ impl State {
         );
         let num_vertices = Shape::SQUARE.len() as u32;
 
-        let board = Board::new(INITIAL_NUM_GRID_PER_ROW);
+        let num_instances = (INITIAL_NUM_GRID_PER_ROW * INITIAL_NUM_GRID_PER_ROW) as u32;
 
-        let num_instances = INITIAL_NUM_GRID_PER_ROW * INITIAL_NUM_GRID_PER_ROW;
-
-        let instances = InstanceRaw::pure_instances(num_instances);
+        let instances = InstanceRaw::pure_instances(num_instances as usize);
 
         let instance_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -153,12 +151,12 @@ impl State {
             }
         );
 
-        let mut current = board.empty_board();
-        for i in 0..current.len() {
-            if rand::random_bool(0.25) {
-                current[i] = Cell::Alive;
-            }
-        }
+        // let mut current = board.empty_board();
+        // for i in 0..current.len() {
+        //     if rand::random_bool(0.25) {
+        //         current[i] = Cell::Alive;
+        //     }
+        // }
         
         let mut state = Self {
             surface,
@@ -170,37 +168,12 @@ impl State {
             vertex_buffer,
             instance_buffer,
             num_instances,
-            board,
-            next: current.clone(),
-            current,
+            // board,
+            // next: current.clone(),
+            // current,
         };
-        state.update_instances();
+        // state.update_instances();
         state
-    }
-
-    pub fn update(&mut self) {
-        let width = self.board.num_grid_per_row;
-
-        for y in 0..width {
-            for x in 0..width {
-                let alive_count = self.board.count_alive_neighbors(&self.current, x, y);
-                let index = self.board.index(x, y);
-                match (alive_count, self.current[index]) {
-                    (3, Cell::Dead) => {
-                        self.next[index] = Cell::Alive;
-                    }
-                    (2 | 3, Cell::Alive) => {
-                        self.next[index] = Cell::Alive;
-                    }
-                    (_, _) => {
-                        self.next[index] = Cell::Dead;
-                    }
-                }
-            }
-        }
-
-        self.update_instances();
-        std::mem::swap(&mut self.current, &mut self.next);
     }
 
     pub fn render(&mut self) {
@@ -255,19 +228,18 @@ impl State {
         frame.present();
     }
 
-    pub fn update_instances(&mut self) {
-        let num_instances_per_row = self.board.num_grid_per_row;
+    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, gap: f32) {
         let mut instances = Vec::new();
         
-        let cell_pitch = 1.6 / (num_instances_per_row - 1) as f32;
+        let cell_pitch = 1.6 / (num_grid_per_row - 1) as f32;
         let cell_scale = cell_pitch * (1.0-GAP);
         
-        for y in 0..num_instances_per_row {
-            for x in 0..num_instances_per_row {
+        for y in 0..num_grid_per_row {
+            for x in 0..num_grid_per_row {
                 let x_pos = (x as f32) * cell_pitch - 0.8;
                 let y_pos = (y as f32) * cell_pitch - 0.8;
 
-                let cell = self.current[y * num_instances_per_row + x];
+                let cell = cells[y * num_grid_per_row + x];
                 let color = match cell {
                     Cell::Dead => [0.05, 0.05, 0.05],
                     Cell::Alive => [0.95, 0.95, 0.95],
@@ -286,6 +258,8 @@ impl State {
             0, 
             bytemuck::cast_slice(&instances),
         );
+
+        self.num_instances = instances.len() as u32;
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
