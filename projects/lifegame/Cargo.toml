@@ -4,14 +4,15 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-wgpu = { workspace = true }
-bytemuck = { workspace = true }
-env_logger = { workspace = true }
-log = { workspace = true }
-pollster = { workspace = true }
-winit = { workspace = true }
-rand = { workspace = true }
-eframe = { workspace = true }
-egui-winit = { workspace = true }
-egui-wgpu = { workspace = true }
+wgpu.workspace = true
+bytemuck.workspace = true
+env_logger.workspace = true
+log.workspace = true
+pollster.workspace = true
+winit.workspace = true
+rand.workspace = true
+eframe.workspace = true
+egui-winit.workspace = true
+egui-wgpu.workspace = true
 egui.workspace = true
+egui_plot.workspace = true

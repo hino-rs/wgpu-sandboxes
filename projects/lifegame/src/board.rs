@@ -4,6 +4,9 @@
 //     (-1,  1), (0,  1), (1,  1),
 // ];
 
+use std::collections::VecDeque;
+
+use crate::utils::ratio_to_u8;
 use crate::{shape::GAP, state::State};
 
 const INITIAL_RANDOM_RATIO: f64 = 0.25;
@@ -20,13 +23,21 @@ pub struct Board {
     pub grid_size: usize,
     pub current: Vec<Cell>,
     pub next: Vec<Cell>,
+    pub tick_count: u64,
 
     pub delay: u64,
     pub pause: bool,
-    pub next_clock: bool,
+    pub next_tick: bool,
     pub cell_colors: Colors,
     pub random_ratio: f64,
     pub alive_dead_count: (u64, u64),
+    pub record: VecDeque<Record>,
+}
+
+#[derive(Clone)]
+pub struct Record {
+    pub alive_count: u64,
+    pub dead_count: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -40,6 +51,22 @@ pub struct Color {
 }
 
 impl Board {
+    pub fn alive_rgb_u8(&self) -> (u8, u8, u8) {
+        (
+            ratio_to_u8(self.cell_colors.0.r),
+            ratio_to_u8(self.cell_colors.0.g),
+            ratio_to_u8(self.cell_colors.0.b),
+        )
+    }
+
+    pub fn dead_rgb_u8(&self) -> (u8, u8, u8) {
+        (
+            ratio_to_u8(self.cell_colors.1.r),
+            ratio_to_u8(self.cell_colors.1.g),
+            ratio_to_u8(self.cell_colors.1.b),
+        )
+    }
+
     pub fn reshuffle(&mut self) {
         let mut new_board = Self::empty_board(self.current.len());
 
@@ -151,27 +178,35 @@ impl Board {
 
         let mut current = Self::empty_board(grid_size);
 
+        let mut alive_count = 0;
         for c in &mut current {
             if rand::random_bool(INITIAL_RANDOM_RATIO) {
                 *c = Cell::Alive;
+                alive_count += 1;
             }
         }
+        let dead_count = current.len() as u64 - alive_count;
+
+        let mut record = VecDeque::with_capacity(100);
+        record.push_back(Record { alive_count, dead_count });
 
         Self {
+            tick_count: 0,
             num_grid_per_row,
             grid_size,
             next: current.clone(),
             current,
             delay: 1,
             pause: false,
-            next_clock: false,
+            next_tick: false,
             cell_colors: Colors
             (
                 Color { r: 0.05, g: 0.05, b: 0.05 }, 
                 Color { r: 0.95, g: 0.95, b: 0.95 },
             ),
             random_ratio: INITIAL_RANDOM_RATIO,
-            alive_dead_count: (0, 0),
+            alive_dead_count: (alive_count, dead_count),
+            record,
         }
     }
      
@@ -227,7 +262,9 @@ impl Board {
         count
     }
 
-    fn clock(&mut self) {
+    fn tick(&mut self) {
+        self.tick_count += 1;
+
         let width = self.num_grid_per_row;
         let mut alive = 0;
         let mut dead = 0;
@@ -270,17 +307,27 @@ impl Board {
 
         self.alive_dead_count = (alive, dead);
         std::mem::swap(&mut self.current, &mut self.next);
+
+        if self.tick_count % 10 == 0 {
+            if self.record.len() > 100 {
+                self.record.pop_front();
+            }
+            self.record.push_back(Record {
+                alive_count: alive,
+                dead_count: dead,
+            });
+        }
     }
 
     pub fn update(&mut self) {
         std::thread::sleep(std::time::Duration::from_millis(self.delay));        
 
         if !self.pause {
-            self.clock();
+            self.tick();
         } else {
-            if self.next_clock {
-                self.clock();
-                self.next_clock = false;
+            if self.next_tick {
+                self.tick();
+                self.next_tick = false;
             }
         }
     }

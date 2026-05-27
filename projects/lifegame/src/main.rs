@@ -2,6 +2,7 @@ mod app;
 mod state;
 mod shape;
 mod board;
+mod utils;
 
 use app::App;
 use winit::event_loop::EventLoop;

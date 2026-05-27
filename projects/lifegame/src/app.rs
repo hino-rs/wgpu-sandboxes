@@ -3,6 +3,7 @@ use std::sync::Arc;
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 use egui::Context as EguiContext;
 use egui_winit::State as EguiState;
+use egui_plot::{Legend, Line, Plot, PlotPoints};
 
 use crate::{board::Board, shape::INITIAL_NUM_GRID_PER_ROW, state::State};
 
@@ -83,6 +84,39 @@ impl ApplicationHandler for App {
 
                         ui.separator(); // -----------------------------------------------
 
+                        let record = board.record.clone();
+
+                        let mut alive_record = Vec::with_capacity(100);
+                        let mut dead_record = Vec::with_capacity(100);
+
+                        for r in record {
+                            alive_record.push(r.alive_count);
+                            dead_record.push(r.dead_count);
+                        }
+
+                        let alive_points: PlotPoints = alive_record.iter()
+                            .enumerate()
+                            .map(|(i, &v)| [i as f64, v as f64])
+                            .collect();
+                        let alive_line = Line::new("Alive", alive_points)
+                            .color(egui::Color32::from_rgb(0, 255, 0));
+
+                        let dead_points: PlotPoints = dead_record.iter()
+                            .enumerate()
+                            .map(|(i, &v)| [i as f64, v as f64])
+                            .collect();
+                        let dead_line = Line::new("Dead", dead_points)
+                            .color(egui::Color32::from_rgb(255, 0, 0));
+
+                        Plot::new("Alive & Dead Record")
+                            .view_aspect(2.0)
+                            .legend(Legend::default())
+                            .show(ui, |plot_ui| {
+                                plot_ui.line(alive_line);
+                                plot_ui.line(dead_line)
+                            });
+                        
+
                         ui.heading("Current Stats");
 
                         let (alive, dead) = board.alive_dead_count;
@@ -103,7 +137,7 @@ impl ApplicationHandler for App {
 
                         // クロックを1つ進める
                         if board.pause {
-                            ui.toggle_value(&mut board.next_clock, "Next Clock");
+                            ui.toggle_value(&mut board.next_tick, "Next Tick");
                         }
 
                         // ランダムの確率
