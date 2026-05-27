@@ -1,10 +1,14 @@
-
-use crate::cell::Cell;
 // const NEIGHBORS: [(isize, isize); 8] = [
 //     (-1, -1), (0, -1), (1, -1),
 //     (-1,  0),          (1,  0),
 //     (-1,  1), (0,  1), (1,  1),
 // ];
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Cell {
+    Alive,
+    Dead,
+}
 
 #[derive(Clone)]
 pub struct Board {
@@ -16,6 +20,17 @@ pub struct Board {
     pub delay: u64,
     pub pause: bool,
     pub next_clock: bool,
+    pub cell_colors: Colors,
+}
+
+#[derive(Clone, Copy)]
+pub struct Colors(pub Color, pub Color);
+
+#[derive(Clone, Copy)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
 }
 
 impl Board {
@@ -42,6 +57,11 @@ impl Board {
             delay: 1,
             pause: false,
             next_clock: false,
+            cell_colors: Colors
+            (
+                Color { r: 0.05, g: 0.05, b: 0.05 }, 
+                Color { r: 0.95, g: 0.95, b: 0.95 },
+            )
         }
     }
      

@@ -79,7 +79,9 @@ impl ApplicationHandler for App {
                     self.egui_ctx.begin_pass(raw_input);
 
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
-                        ui.label("LifeGame Simulator Control Panel");
+                        ui.heading("LifeGame Simulator Control Panel");
+
+                        ui.separator();
 
                         ui.add(egui::Slider::new(&mut board.delay, 0..=1000)
                             .custom_formatter(|val, _| format!("{val}msec"))
@@ -90,6 +92,21 @@ impl ApplicationHandler for App {
                         if board.pause {
                             ui.toggle_value(&mut board.next_clock, "Next Clock");
                         }
+
+                        ui.separator();
+
+                        ui.heading("Color");
+
+                        ui.label("Alive Cell Color");
+                        ui.add(egui::Slider::new(&mut board.cell_colors.0.r, 0.0..=1.0).text("R"));
+                        ui.add(egui::Slider::new(&mut board.cell_colors.0.g, 0.0..=1.0).text("G"));
+                        ui.add(egui::Slider::new(&mut board.cell_colors.0.b, 0.0..=1.0).text("B"));
+                        
+                        ui.label("Dead Cell Color");
+                        ui.add(egui::Slider::new(&mut board.cell_colors.1.r, 0.0..=1.0).text("R"));
+                        ui.add(egui::Slider::new(&mut board.cell_colors.1.g, 0.0..=1.0).text("G"));
+                        ui.add(egui::Slider::new(&mut board.cell_colors.1.b, 0.0..=1.0).text("B"));
+
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
@@ -115,7 +132,7 @@ impl ApplicationHandler for App {
                         pixels_per_point: egui_output.pixels_per_point,
                     };
                     
-                    state.update_instances(board.cells(), board.num_grid_per_row, 0.0); // GAP
+                    state.update_instances(board.cells(), board.num_grid_per_row, 0.0, board.cell_colors); // GAP
                     state.render(&paint_jobs, &screen_descripter);
                 }
 

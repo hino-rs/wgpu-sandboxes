@@ -1,6 +1,5 @@
 mod app;
 mod state;
-mod cell;
 mod shape;
 mod board;
 

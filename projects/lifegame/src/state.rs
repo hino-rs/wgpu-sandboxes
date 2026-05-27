@@ -7,7 +7,7 @@ use winit::window::Window;
 use egui_wgpu::Renderer as EguiRenderer;
 
 use crate::shape::*;
-use crate::cell::*;
+use crate::board::*;
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -267,7 +267,7 @@ impl State {
         frame.present();
     }
 
-    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, _gap: f32) {
+    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, _gap: f32, colors: Colors) {
         let mut instances = Vec::new();
         
         let cell_pitch = 1.6 / (num_grid_per_row - 1) as f32;
@@ -280,8 +280,8 @@ impl State {
 
                 let cell = cells[y * num_grid_per_row + x];
                 let color = match cell {
-                    Cell::Dead => [0.05, 0.05, 0.05],
-                    Cell::Alive => [0.95, 0.95, 0.95],
+                    Cell::Dead => [colors.0.r, colors.0.g, colors.0.b ],
+                    Cell::Alive => [colors.1.r, colors.1.g, colors.1.b ],
                 };
 
                 instances.push(InstanceRaw {
