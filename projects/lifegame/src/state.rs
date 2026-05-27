@@ -196,7 +196,7 @@ impl State {
         // state.update_instances();
     }
 
-    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
+    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor, bg_color: [f32; 3]) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated |
@@ -227,6 +227,14 @@ impl State {
             screen_descriptor,
         );
 
+        let bg = bg_color;
+        let clear_color = wgpu::Color {
+            r: bg[0] as f64,
+            g: bg[1] as f64,
+            b: bg[2] as f64,
+            a: 1.0,
+        };
+
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -235,7 +243,7 @@ impl State {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                        load: wgpu::LoadOp::Clear(clear_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],

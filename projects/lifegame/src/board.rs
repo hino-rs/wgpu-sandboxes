@@ -32,6 +32,7 @@ pub struct Board {
     pub random_ratio: f64,
     pub alive_dead_count: (u64, u64),
     pub record: VecDeque<Record>,
+    pub bg_color: [f32; 3],
 }
 
 #[derive(Clone)]
@@ -207,6 +208,7 @@ impl Board {
             random_ratio: INITIAL_RANDOM_RATIO,
             alive_dead_count: (alive_count, dead_count),
             record,
+            bg_color: [1.0, 1.0, 1.0]
         }
     }
      

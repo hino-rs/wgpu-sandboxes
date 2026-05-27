@@ -82,6 +82,9 @@ impl ApplicationHandler for App {
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
                         ui.heading("LifeGame Simulator Control Panel");
 
+                        ui.label("Background Color");
+                        ui.color_edit_button_rgb(&mut board.bg_color);
+
                         ui.separator(); // -----------------------------------------------
 
                         let record = board.record.clone();
@@ -222,7 +225,7 @@ impl ApplicationHandler for App {
                     };
                     
                     state.update_instances(board.cells(), board.num_grid_per_row, 0.0, board.cell_colors); // GAP
-                    state.render(&paint_jobs, &screen_descripter);
+                    state.render(&paint_jobs, &screen_descripter, board.bg_color);
                 }
 
                 if let Some(window) = &self.window {
