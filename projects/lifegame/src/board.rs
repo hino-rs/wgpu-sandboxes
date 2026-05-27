@@ -38,6 +38,13 @@ impl Board {
         &self.current
     }
 
+    pub fn clear(&mut self) {
+        let grid_size = self.current.len();
+
+        self.current = Self::empty_board(grid_size);
+        self.next = Self::empty_board(grid_size);
+    }
+
     pub fn new(num_grid_per_row: usize) -> Self {
         let grid_size = num_grid_per_row * num_grid_per_row;
 

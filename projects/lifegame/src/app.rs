@@ -83,14 +83,22 @@ impl ApplicationHandler for App {
 
                         ui.separator();
 
+                        // 遅延
                         ui.add(egui::Slider::new(&mut board.delay, 0..=1000)
                             .custom_formatter(|val, _| format!("{val}msec"))
                             .text("Delay"));
 
+                        // 一時停止
                         ui.toggle_value(&mut board.pause, "Pause");
 
+                        // クロックを1つ進める
                         if board.pause {
                             ui.toggle_value(&mut board.next_clock, "Next Clock");
+                        }
+
+                        // 盤面クリア
+                        if ui.toggle_value(&mut false, "Clear").clicked() {
+                            board.clear();
                         }
 
                         ui.separator();
@@ -107,6 +115,7 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(&mut board.cell_colors.1.g, 0.0..=1.0).text("G"));
                         ui.add(egui::Slider::new(&mut board.cell_colors.1.b, 0.0..=1.0).text("B"));
 
+                        ui.separator();
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
