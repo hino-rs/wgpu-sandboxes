@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::cell::Cell;
 // const NEIGHBORS: [(isize, isize); 8] = [
 //     (-1, -1), (0, -1), (1, -1),
@@ -11,9 +13,14 @@ pub struct Board {
     // pub grid_size: usize,
     pub current: Vec<Cell>,
     pub next: Vec<Cell>,
+    pub delay: Duration,
 }
 
 impl Board {
+    pub fn change_delay(&mut self, millis: u64) {
+        self.delay = Duration::from_millis(millis);
+    }
+    
     pub fn cells(&self) -> &[Cell] {
         &self.current
     }
@@ -34,6 +41,7 @@ impl Board {
             // grid_size,
             next: current.clone(),
             current,
+            delay: Duration::from_millis(1),
         }
     }
      
@@ -90,6 +98,8 @@ impl Board {
     }
 
     pub fn update(&mut self) {
+        std::thread::sleep(self.delay);        
+
         let width = self.num_grid_per_row;
 
         for y in 0..width {
@@ -112,4 +122,5 @@ impl Board {
 
         std::mem::swap(&mut self.current, &mut self.next);
     }
+
 }
