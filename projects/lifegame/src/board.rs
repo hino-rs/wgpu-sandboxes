@@ -328,8 +328,6 @@ impl Board {
     }
 
     pub fn update(&mut self) {
-        std::thread::sleep(std::time::Duration::from_millis(self.delay));        
-
         if !self.pause {
             self.tick();
         } else {

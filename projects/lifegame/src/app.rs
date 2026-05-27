@@ -4,6 +4,7 @@ use egui::Context as EguiContext;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use egui_winit::State as EguiState;
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
+use web_time::Instant;
 
 use crate::{board::Board, shape::INITIAL_NUM_GRID_PER_ROW, state::State};
 
@@ -15,6 +16,7 @@ pub struct App {
     egui_ctx: EguiContext,
     egui_state: Option<EguiState>,
     current_tab: ConfigTab,
+    last_update_time: Option<Instant>,
 }
 
 impl ApplicationHandler for App {
@@ -41,6 +43,7 @@ impl ApplicationHandler for App {
         self.board = Some(Board::new(INITIAL_NUM_GRID_PER_ROW));
         self.egui_state = Some(egui_state);
         self.current_tab = ConfigTab::default();
+        self.last_update_time = Some(Instant::now());
     }
 
     fn window_event(
@@ -74,13 +77,26 @@ impl ApplicationHandler for App {
             //     is_synthetic,
             // } => {}
             WindowEvent::RedrawRequested => {
-                if let (Some(state), Some(board), Some(window), Some(egui_state)) = (
+                if let (Some(state), Some(board), Some(window), Some(egui_state), Some(last_update)) = (
                     &mut self.state,
                     &mut self.board,
                     &mut self.window,
                     &mut self.egui_state,
+                    &mut self.last_update_time,
                 ) {
-                    board.update();
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(*last_update);
+                    if !board.pause {
+                        if elapsed.as_millis() >= board.delay as u128 {
+                            board.update();
+                            *last_update = now;
+                        }
+                    } else {
+                        if board.next_tick {
+                            board.update();
+                            *last_update = now;
+                        }
+                    }
 
                     let raw_input = egui_state.take_egui_input(window);
                     self.egui_ctx.begin_pass(raw_input);

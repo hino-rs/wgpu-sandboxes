@@ -16,3 +16,4 @@ egui-winit.workspace = true
 egui-wgpu.workspace = true
 egui.workspace = true
 egui_plot.workspace = true
+web-time = "1.1.0"
