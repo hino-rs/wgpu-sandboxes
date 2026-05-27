@@ -45,6 +45,22 @@ impl Board {
         self.next = Self::empty_board(grid_size);
     }
 
+    pub fn randomly_make_alive(&mut self) {
+        for c in &mut self.current {
+            if rand::random_bool(0.30) {
+                *c = Cell::Alive;
+            }
+        }
+    }
+
+    pub fn randomly_make_dead(&mut self) {
+        for c in &mut self.current {
+            if rand::random_bool(0.30) {
+                *c = Cell::Dead;
+            }
+        }
+    }
+
     pub fn new(num_grid_per_row: usize) -> Self {
         let grid_size = num_grid_per_row * num_grid_per_row;
 

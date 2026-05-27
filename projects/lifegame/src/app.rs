@@ -101,6 +101,16 @@ impl ApplicationHandler for App {
                             board.clear();
                         }
 
+                        // ランダムにAliveにさせる
+                        if ui.toggle_value(&mut false, "Randomly make Alive").clicked() {
+                            board.randomly_make_alive();
+                        }
+                        
+                        // ランダムにDeadにさせる
+                        if ui.toggle_value(&mut false, "Randomly make Dead").clicked() {
+                            board.randomly_make_dead();
+                        }
+
                         ui.separator();
 
                         ui.heading("Color");
