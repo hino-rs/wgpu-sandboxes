@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration, u64::MAX};
+use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 use egui::Context as EguiContext;
@@ -13,19 +13,6 @@ pub struct App {
     pub board: Option<Board>,
     egui_ctx: EguiContext,
     egui_state: Option<EguiState>,
-    pub config: Config,
-}
-
-pub struct Config {
-    pub delay: u64,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            delay: 1,
-        }
-    }
 }
 
 impl ApplicationHandler for App {
@@ -51,7 +38,6 @@ impl ApplicationHandler for App {
         self.state = Some(state);
         self.board = Some(Board::new(INITIAL_NUM_GRID_PER_ROW));
         self.egui_state = Some(egui_state);
-        self.config = Config::default();
     }
 
     fn window_event(
@@ -95,12 +81,9 @@ impl ApplicationHandler for App {
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
                         ui.label("LifeGame Simulator Control Panel");
 
-                        let delay = ui.add(egui::Slider::new(&mut self.config.delay, 0..=1000)
+                        ui.add(egui::Slider::new(&mut board.delay, 0..=1000)
                             .custom_formatter(|val, _| format!("{val}msec"))
                             .text("Delay"));
-                        if delay.changed() {
-                                board.change_delay(self.config.delay);
-                        }
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
