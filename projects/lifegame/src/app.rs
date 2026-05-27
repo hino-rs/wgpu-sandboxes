@@ -83,6 +83,11 @@ impl ApplicationHandler for App {
 
                         ui.separator();
 
+                        ui.heading("Current Stats");
+                        ui.label(format!("Num grid per row{}", board.num_grid_per_row));
+
+                        ui.separator();
+
                         // 遅延
                         ui.add(egui::Slider::new(&mut board.delay, 0..=1000)
                             .custom_formatter(|val, _| format!("{val}msec"))
@@ -126,6 +131,23 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(&mut board.cell_colors.1.b, 0.0..=1.0).text("B"));
 
                         ui.separator();
+
+                        ui.heading("Board Size");
+                        
+                        let ratio_id = ui.id().with("board_resize_ratio");
+                        let mut ratio = ui.ctx().data(|map| map.get_temp::<u8>(ratio_id).unwrap_or(1));
+
+                        if ui.add(egui::Slider::new(&mut ratio, 1..=u8::MAX).text("Ratio")).changed() {
+                            ui.ctx().data_mut(|map| map.insert_temp(ratio_id, ratio));
+                        }
+
+                        if ui.toggle_value(&mut false, format!("+ Increase Size x{ratio}")).clicked() {
+                            board.expand(state, ratio);
+                        }
+                        if ui.toggle_value(&mut false, format!("- Decrease Size x{ratio}")).clicked() {
+                            board.shrink(state, ratio);
+                        }
+                        
                     });
 
                     let egui_output = self.egui_ctx.end_pass();

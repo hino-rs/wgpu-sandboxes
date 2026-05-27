@@ -18,7 +18,7 @@ pub struct State {
     vertex_buffer: wgpu::Buffer,
     num_vertices: u32,
     instance_buffer: wgpu::Buffer,
-    num_instances: u32,
+    pub num_instances: u32,
     // board: Board,
     // current: Vec<Cell>,
     // next: Vec<Cell>,
@@ -26,6 +26,17 @@ pub struct State {
 }
 
 impl State {
+    pub fn update_instance_buffer(&mut self, new_size: usize) {
+        self.instance_buffer = self.device.create_buffer(
+            &wgpu::BufferDescriptor {
+                label: Some("Instance Buffer"),
+                size: (new_size * std::mem::size_of::<InstanceRaw>()) as wgpu::BufferAddress,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }
+        );
+    }
+
     pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 

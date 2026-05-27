@@ -4,6 +4,8 @@
 //     (-1,  1), (0,  1), (1,  1),
 // ];
 
+use crate::{shape::GAP, state::State};
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Cell {
     Alive,
@@ -34,6 +36,69 @@ pub struct Color {
 }
 
 impl Board {
+    pub fn shrink(&mut self, state: &mut State, n: u8) {
+        for _ in 0..n {
+            let current_width = self.num_grid_per_row;
+            
+            if current_width <= 1 || self.current.is_empty() {
+                return;
+            }
+
+            let new_width = current_width - 1;
+            let current_height = (self.current.len() + current_width - 1) / current_width;
+            let new_height = if current_height > 1 { current_height - 1 } else { 0 };
+            let mut result = Vec::with_capacity(new_width * new_height);
+
+            for i in 0..self.current.len() {
+                let row = i / current_width;
+                let col = i % current_width;
+                
+                if col < new_width && row < new_height {
+                    result.push(self.current[i]);
+                }
+            }
+
+            self.num_grid_per_row -= 1;
+            self.current = result;
+            self.next = self.current.clone();
+
+            state.update_instance_buffer(self.current.len());
+            state.update_instances(&self.current, self.num_grid_per_row, GAP, self.cell_colors);
+        }
+    }
+
+    pub fn expand(&mut self, state: &mut State, n: u8) {
+        for _ in 0..n {
+            let current_width = self.num_grid_per_row;
+
+            if current_width == 0 || self.current.is_empty() {
+                return;
+            }
+
+            let current_height = (self.current.len() + current_width - 1) / current_width;
+
+            let new_width = current_width + 1;
+            let new_height = current_height + 1;
+
+            let mut result = vec![Cell::Dead; new_width * new_height];
+
+            for i in 0..self.current.len() {
+                let row = i / current_width;
+                let col = i % current_width;
+
+                let new_index = row * new_width + col;
+                result[new_index] = self.current[i];
+            }
+
+            self.num_grid_per_row += 1;
+            self.current = result;
+            self.next = self.current.clone();
+
+            state.update_instance_buffer(self.current.len());
+            state.update_instances(&self.current, self.num_grid_per_row, GAP, self.cell_colors);
+        }
+    }
+
     pub fn cells(&self) -> &[Cell] {
         &self.current
     }
@@ -60,6 +125,8 @@ impl Board {
             }
         }
     }
+
+
 
     pub fn new(num_grid_per_row: usize) -> Self {
         let grid_size = num_grid_per_row * num_grid_per_row;
