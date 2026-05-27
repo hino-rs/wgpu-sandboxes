@@ -101,6 +101,10 @@ impl ApplicationHandler for App {
                             ui.toggle_value(&mut board.next_clock, "Next Clock");
                         }
 
+                        // ランダムの確率
+                        ui.add(egui::Slider::new(&mut board.random_ratio, 0.00..=1.00))
+                            .on_hover_text("This setting affects the Alive rate during initial generation and the probability for randomly setting entities to Alive/Dead.");
+
                         // 盤面クリア
                         if ui.toggle_value(&mut false, "Clear").clicked() {
                             board.clear();

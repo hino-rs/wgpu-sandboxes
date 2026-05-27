@@ -6,6 +6,8 @@
 
 use crate::{shape::GAP, state::State};
 
+const INITIAL_RANDOM_RATIO: f64 = 0.25;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Cell {
     Alive,
@@ -23,6 +25,7 @@ pub struct Board {
     pub pause: bool,
     pub next_clock: bool,
     pub cell_colors: Colors,
+    pub random_ratio: f64,
 }
 
 #[derive(Clone, Copy)]
@@ -112,7 +115,7 @@ impl Board {
 
     pub fn randomly_make_alive(&mut self) {
         for c in &mut self.current {
-            if rand::random_bool(0.30) {
+            if rand::random_bool(self.random_ratio) {
                 *c = Cell::Alive;
             }
         }
@@ -120,7 +123,7 @@ impl Board {
 
     pub fn randomly_make_dead(&mut self) {
         for c in &mut self.current {
-            if rand::random_bool(0.30) {
+            if rand::random_bool(self.random_ratio) {
                 *c = Cell::Dead;
             }
         }
@@ -134,7 +137,7 @@ impl Board {
         let mut current = Self::empty_board(grid_size);
 
         for c in &mut current {
-            if rand::random_bool(0.25) {
+            if rand::random_bool(INITIAL_RANDOM_RATIO) {
                 *c = Cell::Alive;
             }
         }
@@ -151,7 +154,8 @@ impl Board {
             (
                 Color { r: 0.05, g: 0.05, b: 0.05 }, 
                 Color { r: 0.95, g: 0.95, b: 0.95 },
-            )
+            ),
+            random_ratio: INITIAL_RANDOM_RATIO,
         }
     }
      

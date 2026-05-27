@@ -6,6 +6,7 @@ mod board;
 use app::App;
 use winit::event_loop::EventLoop;
 
+
 fn main() {
     env_logger::init();
 
