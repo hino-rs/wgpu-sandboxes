@@ -39,6 +39,18 @@ pub struct Color {
 }
 
 impl Board {
+    pub fn reshuffle(&mut self) {
+        let mut new_board = Self::empty_board(self.current.len());
+
+        for c in &mut new_board {
+            if rand::random_bool(self.random_ratio) {
+                *c = Cell::Alive;
+            }
+        }
+
+        self.current = new_board;
+    }
+
     pub fn shrink(&mut self, state: &mut State, n: u8) {
         for _ in 0..n {
             let current_width = self.num_grid_per_row;

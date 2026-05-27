@@ -105,6 +105,11 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(&mut board.random_ratio, 0.00..=1.00))
                             .on_hover_text("This setting affects the Alive rate during initial generation and the probability for randomly setting entities to Alive/Dead.");
 
+                        // 再シャッフル
+                        if ui.toggle_value(&mut false, "Reshuffle").clicked() {
+                            board.reshuffle();
+                        }
+
                         // 盤面クリア
                         if ui.toggle_value(&mut false, "Clear").clicked() {
                             board.clear();
