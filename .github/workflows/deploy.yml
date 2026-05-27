@@ -37,7 +37,13 @@ jobs:
       - name: Build with Trunk
         run: |
           cd projects/lifegame
-          trunk build --release --public-url "/${{ github.event.repository.name }}/"
+          trunk build --release --public-url "/${{ github.event.repository.name }}/projects/lifegame/"
+
+      - name: Prepare Deployment Directory
+        run: |
+          mkdir -p deploy_out/projects/lifegame
+          cp index.html deploy_out/
+          cp -r projects/lifegame/dist/* deploy_out/projects/lifegame/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -45,7 +51,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './projects/lifegame/dist'
+          path: './deploy_out'
 
       - name: Deploy to GitHub Pages
         id: deployment
