@@ -12,7 +12,10 @@ pub struct Board {
     // pub grid_size: usize,
     pub current: Vec<Cell>,
     pub next: Vec<Cell>,
+
     pub delay: u64,
+    pub pause: bool,
+    pub next_clock: bool,
 }
 
 impl Board {
@@ -37,6 +40,8 @@ impl Board {
             next: current.clone(),
             current,
             delay: 1,
+            pause: false,
+            next_clock: false,
         }
     }
      
@@ -92,9 +97,7 @@ impl Board {
         count
     }
 
-    pub fn update(&mut self) {
-        std::thread::sleep(std::time::Duration::from_millis(self.delay));        
-
+    fn clock(&mut self) {
         let width = self.num_grid_per_row;
 
         for y in 0..width {
@@ -116,6 +119,19 @@ impl Board {
         }
 
         std::mem::swap(&mut self.current, &mut self.next);
+    }
+
+    pub fn update(&mut self) {
+        std::thread::sleep(std::time::Duration::from_millis(self.delay));        
+
+        if !self.pause {
+            self.clock();
+        } else {
+            if self.next_clock {
+                self.clock();
+                self.next_clock = false;
+            }
+        }
     }
 
 }

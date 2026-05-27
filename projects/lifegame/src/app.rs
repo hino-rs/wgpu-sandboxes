@@ -84,6 +84,12 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(&mut board.delay, 0..=1000)
                             .custom_formatter(|val, _| format!("{val}msec"))
                             .text("Delay"));
+
+                        ui.toggle_value(&mut board.pause, "Pause");
+
+                        if board.pause {
+                            ui.toggle_value(&mut board.next_clock, "Next Clock");
+                        }
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
