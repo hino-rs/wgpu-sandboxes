@@ -82,6 +82,11 @@ impl ApplicationHandler for App {
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
                         ui.heading("LifeGame Simulator Control Panel");
 
+                        ui.label("Grid Gap Size");
+                        if ui.add(egui::Slider::new(&mut board.gap_size, 0.0..=1.0)).changed() {
+                            state.update_instances(&board.current, board.num_grid_per_row, board.gap_size, board.cell_colors);
+                        };
+
                         ui.label("Background Color");
                         ui.color_edit_button_rgb(&mut board.bg_color);
 
@@ -224,7 +229,7 @@ impl ApplicationHandler for App {
                         pixels_per_point: egui_output.pixels_per_point,
                     };
                     
-                    state.update_instances(board.cells(), board.num_grid_per_row, 0.0, board.cell_colors); // GAP
+                    state.update_instances(board.cells(), board.num_grid_per_row, board.gap_size, board.cell_colors);
                     state.render(&paint_jobs, &screen_descripter, board.bg_color);
                 }
 

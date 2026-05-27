@@ -286,11 +286,11 @@ impl State {
         frame.present();
     }
 
-    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, _gap: f32, colors: Colors) {
+    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, gap: f32, colors: Colors) {
         let mut instances = Vec::new();
         
         let cell_pitch = 1.6 / (num_grid_per_row - 1) as f32;
-        let cell_scale = cell_pitch * (1.0-GAP);
+        let cell_scale = cell_pitch * (1.0-gap);
         
         for y in 0..num_grid_per_row {
             for x in 0..num_grid_per_row {

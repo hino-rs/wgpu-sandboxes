@@ -7,7 +7,7 @@
 use std::collections::VecDeque;
 
 use crate::utils::ratio_to_u8;
-use crate::{shape::GAP, state::State};
+use crate::{shape::INITIAL_GAP_SIZE, state::State};
 
 const INITIAL_RANDOM_RATIO: f64 = 0.25;
 
@@ -33,6 +33,7 @@ pub struct Board {
     pub alive_dead_count: (u64, u64),
     pub record: VecDeque<Record>,
     pub bg_color: [f32; 3],
+    pub gap_size: f32,
 }
 
 #[derive(Clone)]
@@ -108,7 +109,7 @@ impl Board {
             self.grid_size = self.current.len();
 
             state.update_instance_buffer(self.current.len());
-            state.update_instances(&self.current, self.num_grid_per_row, GAP, self.cell_colors);
+            state.update_instances(&self.current, self.num_grid_per_row, self.gap_size, self.cell_colors);
         }
     }
 
@@ -141,7 +142,7 @@ impl Board {
             self.grid_size = self.current.len();
 
             state.update_instance_buffer(self.current.len());
-            state.update_instances(&self.current, self.num_grid_per_row, GAP, self.cell_colors);
+            state.update_instances(&self.current, self.num_grid_per_row, self.gap_size, self.cell_colors);
         }
     }
 
@@ -208,7 +209,8 @@ impl Board {
             random_ratio: INITIAL_RANDOM_RATIO,
             alive_dead_count: (alive_count, dead_count),
             record,
-            bg_color: [1.0, 1.0, 1.0]
+            bg_color: [1.0, 1.0, 1.0],
+            gap_size: INITIAL_GAP_SIZE,
         }
     }
      
