@@ -17,7 +17,7 @@ pub enum Cell {
 #[derive(Clone)]
 pub struct Board {
     pub num_grid_per_row: usize,
-    // pub grid_size: usize,
+    pub grid_size: usize,
     pub current: Vec<Cell>,
     pub next: Vec<Cell>,
 
@@ -26,6 +26,7 @@ pub struct Board {
     pub next_clock: bool,
     pub cell_colors: Colors,
     pub random_ratio: f64,
+    pub alive_dead_count: (u64, u64),
 }
 
 #[derive(Clone, Copy)]
@@ -76,6 +77,7 @@ impl Board {
             self.num_grid_per_row -= 1;
             self.current = result;
             self.next = self.current.clone();
+            self.grid_size = self.current.len();
 
             state.update_instance_buffer(self.current.len());
             state.update_instances(&self.current, self.num_grid_per_row, GAP, self.cell_colors);
@@ -108,6 +110,7 @@ impl Board {
             self.num_grid_per_row += 1;
             self.current = result;
             self.next = self.current.clone();
+            self.grid_size = self.current.len();
 
             state.update_instance_buffer(self.current.len());
             state.update_instances(&self.current, self.num_grid_per_row, GAP, self.cell_colors);
@@ -156,7 +159,7 @@ impl Board {
 
         Self {
             num_grid_per_row,
-            // grid_size,
+            grid_size,
             next: current.clone(),
             current,
             delay: 1,
@@ -168,6 +171,7 @@ impl Board {
                 Color { r: 0.95, g: 0.95, b: 0.95 },
             ),
             random_ratio: INITIAL_RANDOM_RATIO,
+            alive_dead_count: (0, 0),
         }
     }
      
@@ -225,25 +229,46 @@ impl Board {
 
     fn clock(&mut self) {
         let width = self.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
 
         for y in 0..width {
             for x in 0..width {
                 let alive_count = self.count_alive_neighbors(&self.current, x, y);
                 let index = self.index(x, y);
-                match (alive_count, self.current[index]) {
-                    (3, Cell::Dead) => {
-                        self.next[index] = Cell::Alive;
+                match self.current[index] {
+                    Cell::Alive => {
+                        alive += 1;
+                        if alive_count == 2 || alive_count == 3 {
+                            self.next[index] = Cell::Alive;
+                            continue;
+                        }
                     }
-                    (2 | 3, Cell::Alive) => {
-                        self.next[index] = Cell::Alive;
-                    }
-                    (_, _) => {
-                        self.next[index] = Cell::Dead;
+                    Cell::Dead => {
+                        dead += 1;
+                        if alive_count == 3 {
+                            self.next[index] = Cell::Alive;
+                            continue;
+                        }
                     }
                 }
+                self.next[index] = Cell::Dead;
+                // match (alive_count, self.current[index]) {
+                //     (3, Cell::Dead) => {
+                //         self.next[index] = Cell::Alive;
+                        
+                //     }
+                //     (2 | 3, Cell::Alive) => {
+                //         self.next[index] = Cell::Alive;
+                //     }
+                //     (_, _) => {
+                //         self.next[index] = Cell::Dead;
+                //     }
+                // }
             }
         }
 
+        self.alive_dead_count = (alive, dead);
         std::mem::swap(&mut self.current, &mut self.next);
     }
 

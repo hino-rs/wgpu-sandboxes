@@ -81,12 +81,17 @@ impl ApplicationHandler for App {
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
                         ui.heading("LifeGame Simulator Control Panel");
 
-                        ui.separator();
+                        ui.separator(); // -----------------------------------------------
 
                         ui.heading("Current Stats");
-                        ui.label(format!("Num grid per row{}", board.num_grid_per_row));
 
-                        ui.separator();
+                        let (alive, dead) = board.alive_dead_count;
+                        ui.label(format!("Board Length: {}", board.num_grid_per_row));
+                        ui.label(format!("Cell Count:   {}", board.grid_size));
+                        ui.label(format!("Alive: {alive}"));
+                        ui.label(format!("Dead:  {dead}"));
+
+                        ui.separator(); // -----------------------------------------------
 
                         // 遅延
                         ui.add(egui::Slider::new(&mut board.delay, 0..=1000)
@@ -125,7 +130,7 @@ impl ApplicationHandler for App {
                             board.randomly_make_dead();
                         }
 
-                        ui.separator();
+                        ui.separator(); // -----------------------------------------------
 
                         ui.heading("Color");
 
@@ -139,7 +144,7 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(&mut board.cell_colors.1.g, 0.0..=1.0).text("G"));
                         ui.add(egui::Slider::new(&mut board.cell_colors.1.b, 0.0..=1.0).text("B"));
 
-                        ui.separator();
+                        ui.separator(); // -----------------------------------------------
 
                         ui.heading("Board Size");
                         
