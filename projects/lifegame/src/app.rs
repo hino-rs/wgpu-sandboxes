@@ -21,6 +21,10 @@ pub struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
+
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes().with_title("wgpu triangle"))
@@ -125,7 +129,7 @@ impl ApplicationHandler for App {
                         ui.separator();
 
                         match self.current_tab {
-                            ConfigTab::Simulation => Self::draw_simulation_ui(ui, board),
+                            ConfigTab::Simulation => Self::draw_simulation_ui(ui, board, state),
                             ConfigTab::Graphics => Self::draw_graphics_ui(ui, board, state),
                             ConfigTab::Stats => Self::draw_stats_ui(ui, board),
                         }
@@ -192,6 +196,30 @@ enum ConfigTab {
 }
 
 impl App {
+    pub fn with_precreated(window: Arc<Window>, state: State) -> Self {
+        let egui_ctx = EguiContext::default();
+        let egui_state = EguiState::new(
+            egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        );
+
+        Self {
+            window: Some(window),
+            state: Some(state),
+            board: Some(Board::new(INITIAL_NUM_GRID_PER_ROW)),
+            egui_state: Some(egui_state),
+            egui_ctx,
+            current_tab: ConfigTab::default(),
+            last_update_time: Some(Instant::now()),
+        }
+    }
+}
+
+impl App {
     fn draw_stats_ui(ui: &mut egui::Ui, board: &Board) {
         let (alive, dead) = board.alive_dead_count;
 
@@ -229,7 +257,7 @@ impl App {
         }
     }
 
-    fn draw_simulation_ui(ui: &mut egui::Ui, board: &mut Board) {
+    fn draw_simulation_ui(ui: &mut egui::Ui, board: &mut Board, state: &mut State) {
         // 一時停止
         ui.toggle_value(&mut board.pause, "Pause");
 
@@ -269,6 +297,8 @@ impl App {
         if ui.toggle_value(&mut false, "Randomly make Dead").clicked() {
             board.randomly_make_dead();
         }
+
+        Self::draw_board_resize_ui(ui, board, state);
     }
 
     fn draw_graphics_ui(ui: &mut egui::Ui, board: &mut Board, state: &mut State) {
@@ -294,8 +324,6 @@ impl App {
                 board.dead_cell_color,
             );
         };
-
-        Self::draw_board_resize_ui(ui, board, state);
     }
 
     fn plot_record_of_cells(ui: &mut egui::Ui, board: &Board) {

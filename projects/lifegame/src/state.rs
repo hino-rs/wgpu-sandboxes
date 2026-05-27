@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use eframe::egui;
+use egui;
 use egui_wgpu::RendererOptions;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
