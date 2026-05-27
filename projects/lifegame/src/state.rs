@@ -286,7 +286,7 @@ impl State {
         frame.present();
     }
 
-    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, gap: f32, colors: Colors) {
+    pub fn update_instances(&mut self, cells: &[Cell], num_grid_per_row: usize, gap: f32, alive_color: [f32; 3], dead_color: [f32; 3]) {
         let mut instances = Vec::new();
         
         let cell_pitch = 1.6 / (num_grid_per_row - 1) as f32;
@@ -299,8 +299,8 @@ impl State {
 
                 let cell = cells[y * num_grid_per_row + x];
                 let color = match cell {
-                    Cell::Dead => [colors.0.r, colors.0.g, colors.0.b ],
-                    Cell::Alive => [colors.1.r, colors.1.g, colors.1.b ],
+                    Cell::Dead  => [dead_color[0], dead_color[1], dead_color[2]],
+                    Cell::Alive => [alive_color[0], alive_color[1], alive_color[2]],
                 };
 
                 instances.push(InstanceRaw {
