@@ -1,10 +1,23 @@
 pub struct Ca {
     pub num_of_bits: u16,
     pub cells: Vec<u8>,
+    pub pause: bool,
+    pub color_of_1: [f32; 3],
+    pub color_of_0: [f32; 3],
 }
 
 impl Ca {
+    pub fn change_bits(&mut self) {
+        let mut cells = vec![0; self.num_of_bits as usize];
+        cells[self.num_of_bits as usize / 2] = 1;
+        self.cells = cells;
+    }
+
     pub fn append_next(&mut self) {
+        if self.pause {
+            return;
+        }
+
         let current_num_of_bits = self.num_of_bits as usize;
         let current_last_bits = &self.cells.clone()[self.cells.len() - current_num_of_bits..];
         

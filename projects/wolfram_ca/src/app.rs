@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
+use egui::Context as EguiContext;
+use egui_winit::State as EguiState;
 
 use crate::{ca::Ca, state::{INITIAL_NUM_OF_BITS, State}};
 
@@ -8,7 +10,9 @@ use crate::{ca::Ca, state::{INITIAL_NUM_OF_BITS, State}};
 pub struct App {
     window: Option<Arc<Window>>,
     state:  Option<State>,
-    ca:     Option<Ca>
+    ca:     Option<Ca>,
+    egui_ctx: EguiContext,
+    egui_state: Option<EguiState>,
 }
 
 impl ApplicationHandler for App {
@@ -24,26 +28,47 @@ impl ApplicationHandler for App {
 
         let state = pollster::block_on(State::new(Arc::clone(&window)));
 
+        let egui_state = EguiState::new(
+            self.egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        );
+
         let mut cells = vec![0; INITIAL_NUM_OF_BITS as usize];
         cells[INITIAL_NUM_OF_BITS as usize / 2] = 1;
 
         let ca = Ca { 
             num_of_bits: INITIAL_NUM_OF_BITS, 
             cells,
+            pause: false,
+            color_of_1: [1.0, 1.0, 1.0],
+            color_of_0: [0.0, 0.0, 0.0],
         };
         
         self.window = Some(window);
         self.state =  Some(state);
-        self.ca = Some(ca)
+        self.ca = Some(ca);
+        self.egui_state = Some(egui_state);
     }
 
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     )
     {
+        if let Some(egui_state) = &mut self.egui_state {
+            let response = egui_state.on_window_event(self.window.as_ref().unwrap(), &event);
+
+            if response.consumed {
+                return;
+            }
+        }
+
         match event {
             WindowEvent::Resized(physical_size) => {
                 if let Some(state) = &mut self.state {
@@ -60,15 +85,80 @@ impl ApplicationHandler for App {
                     Some(window), 
                     Some(state),
                     Some(ca),
+                    Some(egui_state),
                 ) = (
                     &mut self.window, 
                     &mut self.state,
                     &mut self.ca,
+                    &mut self.egui_state,
                 ) {
+                    let raw_input = egui_state.take_egui_input(window);
+                    self.egui_ctx.begin_pass(raw_input);
+
+                    egui::Window::new("Config").show(&self.egui_ctx, |ui| {
+                        ui.heading("Wolfram Cellular Automata");
+
+                        ui.label("Num Of Bits");
+                        if ui.add(egui::Slider::new(&mut ca.num_of_bits, 1..=4096)).changed() {
+                            ca.change_bits();
+                        };
+
+                        if ui.button("Increase bits by 1").clicked() {
+                            if ca.num_of_bits < 4096 {
+                                ca.num_of_bits += 1;
+                                ca.change_bits(); 
+                            }
+                        }
+
+                        if ui.button("Decrease bits by 1").clicked() {
+                            if ca.num_of_bits > 1 {
+                                ca.num_of_bits -= 1;
+                                ca.change_bits();
+                            }
+                        }
+
+                        ui.toggle_value(&mut ca.pause, "Pause");
+
+                        ui.label("Color Of `1` Cells");
+                        ui.color_edit_button_rgb(&mut ca.color_of_1);
+
+                        ui.label("Color Of `0` Cells");
+                        ui.color_edit_button_rgb(&mut ca.color_of_0);
+
+                        ui.label("Background Color");
+                        ui.color_edit_button_rgb(&mut state.bg_color);
+                    });
+
+                    let egui_output = self.egui_ctx.end_pass();
+                    egui_state.handle_platform_output(window, egui_output.platform_output);
+
+                    for (id, image_delta) in &egui_output.textures_delta.set {
+                        state.egui_renderer.update_texture(
+                            &state.device,
+                            &state.queue,
+                            *id,
+                            image_delta,
+                        );
+                    }
+
+                    for id in &egui_output.textures_delta.free {
+                        state.egui_renderer.free_texture(id);
+                    }
+
+                    let paint_jobs = self
+                        .egui_ctx
+                        .tessellate(egui_output.shapes, egui_output.pixels_per_point);
+
+                    let screen_descripter = egui_wgpu::ScreenDescriptor {
+                        size_in_pixels: [state.config.width, state.config.height],
+                        pixels_per_point: egui_output.pixels_per_point,
+                    };
+
+                    state.update_instances(&ca.cells, ca.num_of_bits, ca.color_of_1, ca.color_of_0);
+                    state.render(&paint_jobs, &screen_descripter);
+
                     window.request_redraw();
                     ca.append_next();
-                    state.render();
-                    state.update_instances(&ca.cells, ca.num_of_bits);
                 }
             }
             

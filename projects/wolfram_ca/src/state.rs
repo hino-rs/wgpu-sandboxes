@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use winit::window::{Window};
 use wgpu::util::DeviceExt;
+use egui_wgpu::{Renderer as EguiRenderer, RendererOptions};
 
 use crate::shader::{InstanceRaw, SQUARE, Vertex};
 
@@ -8,14 +9,16 @@ pub const INITIAL_NUM_OF_BITS: u16 = 517;
 
 pub struct State {
     surface: wgpu::Surface<'static>,
-    device:  wgpu::Device,
-    queue:   wgpu::Queue,
-    config:  wgpu::SurfaceConfiguration,
+    pub device:  wgpu::Device,
+    pub queue:   wgpu::Queue,
+    pub config:  wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer:   wgpu::Buffer,
     num_vertices:    u32,
     instance_buffer: wgpu::Buffer,
     num_instances:   u32,
+    pub egui_renderer: EguiRenderer,
+    pub bg_color: [f32; 3],
 }
 
 impl State {
@@ -144,6 +147,12 @@ impl State {
             }
         );
         
+        let egui_renderer = EguiRenderer::new(
+            &device,
+            config.format,
+            RendererOptions::default(),
+        );
+
         Self {
             surface,
             device,
@@ -154,10 +163,12 @@ impl State {
             num_vertices,
             instance_buffer,
             num_instances,
+            egui_renderer,
+            bg_color: [1.0, 1.0, 1.0],
         }
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated |
@@ -175,14 +186,23 @@ impl State {
         };
 
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
 
+        self.egui_renderer.update_buffers(
+            &self.device, 
+            &self.queue, 
+            &mut encoder, 
+            paint_jobs, 
+            screen_descriptor,
+        );
+
         let clear_color = wgpu::Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
+            r: self.bg_color[0] as f64,
+            g: self.bg_color[1] as f64,
+            b: self.bg_color[2] as f64,
             a: 1.0,
         };
         
@@ -211,11 +231,32 @@ impl State {
             render_pass.draw(0..self.num_vertices, 0..self.num_instances);
         }
 
+        {
+            let mut egui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load, // 重ね
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None
+            }).forget_lifetime();
+
+            self.egui_renderer.render(&mut egui_pass, paint_jobs, screen_descriptor);
+        }
+
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
     }
 
-    pub fn update_instances(&mut self, cells: &[u8], num_of_bits: u16) {
+    pub fn update_instances(&mut self, cells: &[u8], num_of_bits: u16, color_1: [f32; 3], color_0: [f32; 3]) {
         let mut instances = Vec::new();
         let num_of_bits = num_of_bits as usize;
         let rows = cells.len() / num_of_bits as usize;
@@ -230,7 +271,11 @@ impl State {
                 let y_pos = 0.8 - (y as f32) * cell_pitch;
 
                 let cell = cells[y * (num_of_bits) + x];
-                let color = if cell == 1 { [1.0, 1.0, 1.0] } else { [0.0, 0.0, 0.0] };
+                let color = if cell == 1 { 
+                    [color_1[0], color_1[1], color_1[2]] 
+                } else { 
+                    [color_0[0], color_0[1], color_0[2]] 
+                };
 
                 instances.push(InstanceRaw {
                     position: [x_pos, y_pos, 0.0],
