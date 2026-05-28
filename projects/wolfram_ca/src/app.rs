@@ -6,6 +6,8 @@ use egui_winit::State as EguiState;
 
 use crate::{ca::Ca, state::{INITIAL_NUM_OF_BITS, State}};
 
+pub const INITIAL_RULE: u8 = 30;
+
 #[derive(Default)]
 pub struct App {
     window: Option<Arc<Window>>,
@@ -41,6 +43,7 @@ impl ApplicationHandler for App {
         cells[INITIAL_NUM_OF_BITS as usize / 2] = 1;
 
         let ca = Ca { 
+            rule: INITIAL_RULE,
             num_of_bits: INITIAL_NUM_OF_BITS, 
             cells,
             pause: false,
@@ -98,24 +101,29 @@ impl ApplicationHandler for App {
                     egui::Window::new("Config").show(&self.egui_ctx, |ui| {
                         ui.heading("Wolfram Cellular Automata");
 
-                        ui.label("Num Of Bits");
-                        if ui.add(egui::Slider::new(&mut ca.num_of_bits, 1..=4096)).changed() {
+                        ui.label("Rule");
+                        if ui.add(egui::Slider::new(&mut ca.rule, 0..=u8::MAX)).changed() {
                             ca.change_bits();
-                        };
+                        }
 
-                        if ui.button("Increase bits by 1").clicked() {
-                            if ca.num_of_bits < 4096 {
-                                ca.num_of_bits += 1;
+                        if ui.button("Increase Rule by 1").clicked() {
+                            if ca.rule < 255 {
+                                ca.rule += 1;
                                 ca.change_bits(); 
                             }
                         }
 
-                        if ui.button("Decrease bits by 1").clicked() {
-                            if ca.num_of_bits > 1 {
-                                ca.num_of_bits -= 1;
+                        if ui.button("Decrease Rule by 1").clicked() {
+                            if ca.rule > 0 {
+                                ca.rule -= 1;
                                 ca.change_bits();
                             }
                         }
+
+                        ui.label("Num Of Bits");
+                        if ui.add(egui::Slider::new(&mut ca.num_of_bits, 1..=4096)).changed() {
+                            ca.change_bits();
+                        };
 
                         ui.toggle_value(&mut ca.pause, "Pause");
 
