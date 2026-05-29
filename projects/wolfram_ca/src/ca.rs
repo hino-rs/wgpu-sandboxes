@@ -5,6 +5,7 @@ pub struct Ca {
     pub pause: bool,
     pub color_of_1: [f32; 3],
     pub color_of_0: [f32; 3],
+    pub circulation: bool,
 }
 
 impl Ca {
@@ -31,8 +32,28 @@ impl Ca {
 
         for i in 0..current_num_of_bits {
             let center = current_last_bits[i];
-            let left = if i != 0 { current_last_bits[i - 1] } else { 0 };
-            let right = if i != current_num_of_bits-1 { current_last_bits[i + 1] } else { 0 };
+            let mut left = 0;
+            let mut right = 0;
+
+            if self.circulation {
+                left = if i != 0 {
+                    current_last_bits[i - 1]
+                } else {
+                    current_last_bits[current_num_of_bits - 1]
+                };
+                right = if i != current_num_of_bits - 1 {
+                    current_last_bits[i + 1]
+                } else {
+                    current_last_bits[0]
+                };
+            } else {
+                left = if i != 0 { current_last_bits[i - 1] } else { 0 };
+                right = if i != current_num_of_bits - 1 {
+                    current_last_bits[i + 1]
+                } else {
+                    0
+                };
+            }
 
             let bit = left * 3 + center * 2 + right * 1;
             let next = (self.rule >> bit) & 1;

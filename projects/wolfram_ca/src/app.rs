@@ -1,18 +1,21 @@
 use std::sync::Arc;
 
-use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 use egui::Context as EguiContext;
 use egui_winit::State as EguiState;
+use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 
-use crate::{ca::Ca, state::{INITIAL_NUM_OF_BITS, State}};
+use crate::{
+    ca::Ca,
+    state::{INITIAL_NUM_OF_BITS, State},
+};
 
 pub const INITIAL_RULE: u8 = 30;
 
 #[derive(Default)]
 pub struct App {
     window: Option<Arc<Window>>,
-    state:  Option<State>,
-    ca:     Option<Ca>,
+    state: Option<State>,
+    ca: Option<Ca>,
     egui_ctx: EguiContext,
     egui_state: Option<EguiState>,
 }
@@ -25,7 +28,8 @@ impl ApplicationHandler for App {
 
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes().with_title("Wolfram CA")).unwrap()
+                .create_window(Window::default_attributes().with_title("Wolfram CA"))
+                .unwrap(),
         );
 
         let state = pollster::block_on(State::new(Arc::clone(&window)));
@@ -42,17 +46,18 @@ impl ApplicationHandler for App {
         let mut cells = vec![0; INITIAL_NUM_OF_BITS as usize];
         cells[INITIAL_NUM_OF_BITS as usize / 2] = 1;
 
-        let ca = Ca { 
+        let ca = Ca {
             rule: INITIAL_RULE,
-            num_of_bits: INITIAL_NUM_OF_BITS, 
+            num_of_bits: INITIAL_NUM_OF_BITS,
             cells,
             pause: false,
             color_of_1: [1.0, 1.0, 1.0],
             color_of_0: [0.0, 0.0, 0.0],
+            circulation: false,
         };
-        
+
         self.window = Some(window);
-        self.state =  Some(state);
+        self.state = Some(state);
         self.ca = Some(ca);
         self.egui_state = Some(egui_state);
     }
@@ -62,8 +67,7 @@ impl ApplicationHandler for App {
         event_loop: &winit::event_loop::ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
-    )
-    {
+    ) {
         if let Some(egui_state) = &mut self.egui_state {
             let response = egui_state.on_window_event(self.window.as_ref().unwrap(), &event);
 
@@ -84,13 +88,8 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let (
-                    Some(window), 
-                    Some(state),
-                    Some(ca),
-                    Some(egui_state),
-                ) = (
-                    &mut self.window, 
+                if let (Some(window), Some(state), Some(ca), Some(egui_state)) = (
+                    &mut self.window,
                     &mut self.state,
                     &mut self.ca,
                     &mut self.egui_state,
@@ -102,14 +101,17 @@ impl ApplicationHandler for App {
                         ui.heading("Wolfram Cellular Automata");
 
                         ui.label("Rule");
-                        if ui.add(egui::Slider::new(&mut ca.rule, 0..=u8::MAX)).changed() {
+                        if ui
+                            .add(egui::Slider::new(&mut ca.rule, 0..=u8::MAX))
+                            .changed()
+                        {
                             ca.change_bits();
                         }
 
                         if ui.button("Increase Rule by 1").clicked() {
                             if ca.rule < 255 {
                                 ca.rule += 1;
-                                ca.change_bits(); 
+                                ca.change_bits();
                             }
                         }
 
@@ -120,8 +122,13 @@ impl ApplicationHandler for App {
                             }
                         }
 
+                        ui.checkbox(&mut ca.circulation, "Circulation");
+
                         ui.label("Num Of Bits");
-                        if ui.add(egui::Slider::new(&mut ca.num_of_bits, 1..=4096)).changed() {
+                        if ui
+                            .add(egui::Slider::new(&mut ca.num_of_bits, 1..=4096))
+                            .changed()
+                        {
                             ca.change_bits();
                         };
 
@@ -169,12 +176,10 @@ impl ApplicationHandler for App {
                     ca.append_next();
                 }
             }
-            
+
             _ => {}
         }
-    }    
+    }
 }
 
-impl App {
-
-}
+impl App {}

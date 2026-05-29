@@ -5,7 +5,7 @@ use egui_wgpu::{Renderer as EguiRenderer, RendererOptions};
 
 use crate::shader::{InstanceRaw, SQUARE, Vertex};
 
-pub const INITIAL_NUM_OF_BITS: u16 = 517;
+pub const INITIAL_NUM_OF_BITS: u16 = 256;
 
 pub struct State {
     surface: wgpu::Surface<'static>,
