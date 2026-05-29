@@ -3,10 +3,14 @@ use std::sync::Arc;
 use egui::Context as EguiContext;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use egui_winit::State as EguiState;
-use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 use web_time::Instant;
+use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 
-use crate::{board::Board, shape::INITIAL_NUM_GRID_PER_ROW, state::State};
+use crate::{
+    board::{Board, Rule},
+    shape::INITIAL_NUM_GRID_PER_ROW,
+    state::State,
+};
 
 #[derive(Default)]
 pub struct App {
@@ -81,7 +85,13 @@ impl ApplicationHandler for App {
             //     is_synthetic,
             // } => {}
             WindowEvent::RedrawRequested => {
-                if let (Some(state), Some(board), Some(window), Some(egui_state), Some(last_update)) = (
+                if let (
+                    Some(state),
+                    Some(board),
+                    Some(window),
+                    Some(egui_state),
+                    Some(last_update),
+                ) = (
                     &mut self.state,
                     &mut self.board,
                     &mut self.window,
@@ -258,6 +268,53 @@ impl App {
     }
 
     fn draw_simulation_ui(ui: &mut egui::Ui, board: &mut Board, state: &mut State) {
+        // ルール選択
+        ui.label("Algorithm");
+        egui::ComboBox::new(2, "")
+            .selected_text(format!("{}", board.rule))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut board.rule,
+                    Rule::ConwaysGameOfLife,
+                    Rule::to_text(Rule::ConwaysGameOfLife),
+                );
+                ui.selectable_value(
+                    &mut board.rule,
+                    Rule::HighLife,
+                    Rule::to_text(Rule::HighLife),
+                );
+                ui.selectable_value(&mut board.rule, Rule::Seeds, Rule::to_text(Rule::Seeds));
+                ui.selectable_value(&mut board.rule, Rule::Maze, Rule::to_text(Rule::Maze));
+                ui.selectable_value(
+                    &mut board.rule,
+                    Rule::Mazectric,
+                    Rule::to_text(Rule::Mazectric),
+                );
+                ui.selectable_value(
+                    &mut board.rule,
+                    Rule::Replicator,
+                    Rule::to_text(Rule::Replicator),
+                );
+                ui.selectable_value(
+                    &mut board.rule,
+                    Rule::DayAndNight,
+                    Rule::to_text(Rule::DayAndNight),
+                );
+                ui.selectable_value(&mut board.rule, Rule::Morley, Rule::to_text(Rule::Morley));
+                ui.selectable_value(&mut board.rule, Rule::TwoxTwo, Rule::to_text(Rule::TwoxTwo));
+                ui.selectable_value(&mut board.rule, Rule::Walling, Rule::to_text(Rule::Walling));
+                ui.selectable_value(
+                    &mut board.rule,
+                    Rule::Vreeland,
+                    Rule::to_text(Rule::Vreeland),
+                );
+                ui.selectable_value(
+                    &mut board.rule,
+                    Rule::LiveFreeOrDie,
+                    Rule::to_text(Rule::LiveFreeOrDie),
+                );
+            });
+
         // 一時停止
         ui.toggle_value(&mut board.pause, "Pause");
 

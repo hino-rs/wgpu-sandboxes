@@ -36,6 +36,65 @@ pub struct Board {
     pub gap_size: f32,
     pub alive_cell_color: [f32; 3],
     pub dead_cell_color: [f32; 3],
+    pub rule: Rule,
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum Rule {
+    ConwaysGameOfLife,
+    HighLife,
+    Seeds,
+    Maze,
+    Mazectric,
+    Replicator,
+    DayAndNight,
+    Morley,
+    TwoxTwo,
+    Walling,
+    Vreeland,
+    LiveFreeOrDie,
+}
+
+impl std::fmt::Display for Rule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Rule::ConwaysGameOfLife => "Conway's Game of Life",
+                Rule::HighLife => "HighLife",
+                Rule::Seeds => "Seeds",
+                Rule::Maze => "Maze",
+                Rule::Mazectric => "Mazectric",
+                Rule::Replicator => "Replicator",
+                Rule::DayAndNight => "Day & Night",
+                Rule::Morley => "Morley",
+                Rule::TwoxTwo => "2x2",
+                Rule::Walling => "Walling",
+                Rule::Vreeland => "Vreeland",
+                Rule::LiveFreeOrDie => "Live Free or Die",
+            }
+        )
+    }
+}
+
+impl Rule {
+    pub fn to_text(rule: Rule) -> &'static str {
+        match rule {
+            Rule::ConwaysGameOfLife => "Conway's Game of Life",
+            Rule::HighLife => "HighLife",
+            Rule::Seeds => "Seeds",
+            Rule::Maze => "Maze",
+            Rule::Mazectric => "Mazectric",
+            Rule::Replicator => "Replicator",
+            Rule::DayAndNight => "Day & Night",
+            Rule::Morley => "Morley",
+            Rule::TwoxTwo => "2x2",
+            Rule::Walling => "Walling",
+            Rule::Vreeland => "Vreeland",
+            Rule::LiveFreeOrDie => "Live Free or Die",
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -86,20 +145,24 @@ impl Board {
     pub fn shrink(&mut self, state: &mut State, n: u8) {
         for _ in 0..n {
             let current_width = self.num_grid_per_row;
-            
+
             if current_width <= 1 || self.current.is_empty() {
                 return;
             }
 
             let new_width = current_width - 1;
             let current_height = (self.current.len() + current_width - 1) / current_width;
-            let new_height = if current_height > 1 { current_height - 1 } else { 0 };
+            let new_height = if current_height > 1 {
+                current_height - 1
+            } else {
+                0
+            };
             let mut result = Vec::with_capacity(new_width * new_height);
 
             for i in 0..self.current.len() {
                 let row = i / current_width;
                 let col = i % current_width;
-                
+
                 if col < new_width && row < new_height {
                     result.push(self.current[i]);
                 }
@@ -111,7 +174,13 @@ impl Board {
             self.grid_size = self.current.len();
 
             state.update_instance_buffer(self.current.len());
-            state.update_instances(&self.current, self.num_grid_per_row, self.gap_size, self.alive_cell_color, self.dead_cell_color);
+            state.update_instances(
+                &self.current,
+                self.num_grid_per_row,
+                self.gap_size,
+                self.alive_cell_color,
+                self.dead_cell_color,
+            );
         }
     }
 
@@ -144,7 +213,13 @@ impl Board {
             self.grid_size = self.current.len();
 
             state.update_instance_buffer(self.current.len());
-            state.update_instances(&self.current, self.num_grid_per_row, self.gap_size, self.alive_cell_color, self.dead_cell_color);
+            state.update_instances(
+                &self.current,
+                self.num_grid_per_row,
+                self.gap_size,
+                self.alive_cell_color,
+                self.dead_cell_color,
+            );
         }
     }
 
@@ -175,8 +250,6 @@ impl Board {
         }
     }
 
-
-
     pub fn new(num_grid_per_row: usize) -> Self {
         let grid_size = num_grid_per_row * num_grid_per_row;
 
@@ -192,7 +265,10 @@ impl Board {
         let dead_count = current.len() as u64 - alive_count;
 
         let mut record = VecDeque::with_capacity(100);
-        record.push_back(Record { alive_count, dead_count });
+        record.push_back(Record {
+            alive_count,
+            dead_count,
+        });
 
         Self {
             tick_count: 0,
@@ -205,7 +281,7 @@ impl Board {
             next_tick: false,
             // cell_colors: Colors
             // (
-            //     Color { r: 0.05, g: 0.05, b: 0.05 }, 
+            //     Color { r: 0.05, g: 0.05, b: 0.05 },
             //     Color { r: 0.95, g: 0.95, b: 0.95 },
             // ),
             random_ratio: INITIAL_RANDOM_RATIO,
@@ -215,9 +291,10 @@ impl Board {
             gap_size: INITIAL_GAP_SIZE,
             alive_cell_color: [0.95, 0.95, 0.95],
             dead_cell_color: [0.05, 0.05, 0.05],
+            rule: Rule::ConwaysGameOfLife,
         }
     }
-     
+
     pub fn empty_board(grid_size: usize) -> Vec<Cell> {
         vec![Cell::Dead; grid_size]
     }
@@ -227,10 +304,7 @@ impl Board {
     }
 
     pub fn _unravel_index(&self, index: usize) -> (usize, usize) {
-        (
-            index % self.num_grid_per_row,
-            index / self.num_grid_per_row,
-        )
+        (index % self.num_grid_per_row, index / self.num_grid_per_row)
     }
 
     pub fn count_alive_neighbors(&self, current_grid: &[Cell], x: usize, y: usize) -> usize {
@@ -248,8 +322,8 @@ impl Board {
         //     };
         // }
 
-        let dx_list = [length -1, 0, 1];
-        let dy_list = [length -1, 0, 1];
+        let dx_list = [length - 1, 0, 1];
+        let dy_list = [length - 1, 0, 1];
 
         for &dx in &dx_list {
             for &dy in &dy_list {
@@ -262,7 +336,7 @@ impl Board {
 
                 count += match current_grid[self.index(nx, ny)] {
                     Cell::Dead => 0,
-                    Cell::Alive  => 1,
+                    Cell::Alive => 1,
                 };
             }
         }
@@ -301,7 +375,7 @@ impl Board {
                 // match (alive_count, self.current[index]) {
                 //     (3, Cell::Dead) => {
                 //         self.next[index] = Cell::Alive;
-                        
+
                 //     }
                 //     (2 | 3, Cell::Alive) => {
                 //         self.next[index] = Cell::Alive;
@@ -337,5 +411,4 @@ impl Board {
             }
         }
     }
-
 }
