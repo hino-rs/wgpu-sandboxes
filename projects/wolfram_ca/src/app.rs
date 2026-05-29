@@ -201,4 +201,40 @@ impl ApplicationHandler for App {
     }
 }
 
-impl App {}
+impl App {
+    pub fn with_precreated(window: Arc<Window>, state: State) -> Self {
+        let egui_ctx = EguiContext::default();
+        let egui_state = EguiState::new(
+            egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        );
+
+        let mut cells = vec![0; INITIAL_NUM_OF_BITS as usize];
+        cells[INITIAL_NUM_OF_BITS as usize / 2] = 1;
+
+        let ca = Ca {
+            rule: INITIAL_RULE,
+            num_of_bits: INITIAL_NUM_OF_BITS,
+            cells,
+            pause: false,
+            color_of_1: [1.0, 1.0, 1.0],
+            color_of_0: [0.0, 0.0, 0.0],
+            circulation: false,
+            stay: false,
+        };
+
+        Self {
+            window: Some(window),
+            state: Some(state),
+            ca: Some(ca), 
+            egui_state: Some(egui_state),
+            egui_ctx,
+            last_update_time: Some(Instant::now()),
+            delay: 0,
+        }
+    }
+}

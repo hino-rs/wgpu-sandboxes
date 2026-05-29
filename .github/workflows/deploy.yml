@@ -36,14 +36,22 @@ jobs:
 
       - name: Build with Trunk
         run: |
-          cd projects/lifegame
-          trunk build --release --public-url "/${{ github.event.repository.name }}/projects/lifegame/"
+          for project in lifegame wolfram_ca; do
+            echo "::group::Building $project"
+            cd "projects/$project"
+            trunk build --release --public-url "/${{ github.event.repository.name }}/projects/$project/"
+            cd ../..
+            echo "::endgroup::"
+          done
 
       - name: Prepare Deployment Directory
         run: |
-          mkdir -p deploy_out/projects/lifegame
+          mkdir -p deploy_out
           cp index.html deploy_out/
-          cp -r projects/lifegame/dist/* deploy_out/projects/lifegame/
+          for project in lifegame wolfram_ca; do
+            mkdir -p "deploy_out/projects/$project"
+            cp -r "projects/$project/dist/"* "deploy_out/projects/$project/"
+          done
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
