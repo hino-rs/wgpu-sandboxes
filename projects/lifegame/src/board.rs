@@ -51,7 +51,6 @@ pub enum Rule {
     Morley,
     TwoxTwo,
     Walling,
-    Vreeland,
     LiveFreeOrDie,
 }
 
@@ -71,7 +70,6 @@ impl std::fmt::Display for Rule {
                 Rule::Morley => "Morley",
                 Rule::TwoxTwo => "2x2",
                 Rule::Walling => "Walling",
-                Rule::Vreeland => "Vreeland",
                 Rule::LiveFreeOrDie => "Live Free or Die",
             }
         )
@@ -91,7 +89,6 @@ impl Rule {
             Rule::Morley => "Morley",
             Rule::TwoxTwo => "2x2",
             Rule::Walling => "Walling",
-            Rule::Vreeland => "Vreeland",
             Rule::LiveFreeOrDie => "Live Free or Die",
         }
     }
@@ -347,20 +344,38 @@ impl Board {
     fn tick(&mut self) {
         self.tick_count += 1;
 
-        let (alive, dead) = match self.rule {
-            Rule::ConwaysGameOfLife => Rule::conways_game_of_life(self),
-            Rule::HighLife          => Rule::high_life(self),
-            Rule::Seeds             => Rule::seeds(self),
-            Rule::Maze              => Rule::maze(self),
-            Rule::Mazectric         => Rule::mazectric(self),
-            Rule::Replicator        => Rule::replicator(self),
-            Rule::DayAndNight       => Rule::day_and_night(self),
-            Rule::Morley            => Rule::morley(self),
-            Rule::TwoxTwo           => Rule::two_x_two(self),
-            Rule::Walling           => Rule::walling(self),
-            Rule::Vreeland          => Rule::vreeland(self),
-            Rule::LiveFreeOrDie     => Rule::live_free_or_die(self),
-        };
+        let width = self.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        for y in 0..width {
+            for x in 0..width {
+                let alive_count = self.count_alive_neighbors(&self.current, x, y);
+                let index = self.index(x, y);
+                
+                let next_cell = 
+                    match self.rule {
+                        Rule::ConwaysGameOfLife => Rule::conways_game_of_life(self.current[index], alive_count),
+                        Rule::HighLife          => Rule::high_life(self.current[index], alive_count),
+                        Rule::Seeds             => Rule::seeds(self.current[index], alive_count),
+                        Rule::Maze              => Rule::maze(self.current[index], alive_count),
+                        Rule::Mazectric         => Rule::mazectric(self.current[index], alive_count),
+                        Rule::Replicator        => Rule::replicator(self.current[index], alive_count),
+                        Rule::DayAndNight       => Rule::day_and_night(self.current[index], alive_count),
+                        Rule::Morley            => Rule::morley(self.current[index], alive_count),
+                        Rule::TwoxTwo           => Rule::two_x_two(self.current[index], alive_count),
+                        Rule::Walling           => Rule::walling(self.current[index], alive_count),
+                        Rule::LiveFreeOrDie     => Rule::live_free_or_die(self.current[index], alive_count),
+                    };
+
+                match next_cell {
+                    Cell::Alive => alive += 1,
+                    Cell::Dead  => dead += 1,
+                }
+
+                self.next[index] = next_cell;
+            }
+        }
 
         self.alive_dead_count = (alive, dead);
         std::mem::swap(&mut self.current, &mut self.next);
@@ -389,151 +404,154 @@ impl Board {
 }
 
 impl Rule {
-    fn conways_game_of_life(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        for y in 0..width {
-            for x in 0..width {
-                let alive_count = board.count_alive_neighbors(&board.current, x, y);
-                let index = board.index(x, y);
-                
-                board.next[index] = match board.current[index] {
-                    Cell::Alive => {
-                        alive += 1;
-                        if alive_count == 2 || alive_count == 3 {
-                            Cell::Alive
-                        } else {
-                            Cell::Dead
-                        }
-                    }
-                    Cell::Dead => {
-                        dead += 1;
-                        if alive_count == 3 {
-                            Cell::Alive
-                        } else {
-                            Cell::Dead
-                        }
-                    }
-                }
+    fn conways_game_of_life(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 2 | 3) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 3) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
             }
         }
-
-        (alive, dead)
     }
 
-    fn high_life(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        for y in 0..width {
-            for x in 0..width {
-                let alive_count = board.count_alive_neighbors(&board.current, x, y);
-                let index = board.index(x, y);
-                
-                board.next[index] = match board.current[index] {
-                    Cell::Alive => {
-                        alive += 1;
-                        if alive_count == 2 || alive_count == 3 {
-                            Cell::Alive
-                        } else {
-                            Cell::Dead
-                        }
-                    }
-                    Cell::Dead => {
-                        dead += 1;
-                        if alive_count == 3 || alive_count == 6 {
-                            Cell::Alive
-                        } else {
-                            Cell::Dead
-                        }
-                    }
-                }
+    fn high_life(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 2 | 3) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 3 | 6) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
             }
         }
-
-        (alive, dead)   
     }
     
-    fn seeds(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn seeds(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Dead, 2) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn maze(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn maze(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 1 | 2 | 3 | 4 | 5) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 3) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn mazectric(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn mazectric(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 1 | 2 | 3 | 4) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 3) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn replicator(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn replicator(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 1 | 3 | 5 | 7) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 1 | 3 | 5 | 7) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn day_and_night(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn day_and_night(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 3 | 4 | 6 | 7 | 8) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 3 | 6 | 7 | 8) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn morley(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn morley(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 2 | 4 | 5) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 3 | 6 | 8) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn two_x_two(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn two_x_two(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 1 | 2 | 5) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 3 | 6) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn walling(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn walling(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 2 | 3 | 4 | 5) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 4 | 5 | 6 | 7 | 8) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 
-    fn vreeland(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
-    }
-
-    fn live_free_or_die(board: &mut Board) -> (u64, u64) {
-        let width = board.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        (alive, dead)
+    fn live_free_or_die(cell: Cell, alive_count: usize) -> Cell {
+        match (cell, alive_count) {
+            (Cell::Alive, 0) => {
+                Cell::Alive
+            }
+            (Cell::Dead, 2) => {
+                Cell::Alive
+            }
+            _ => {
+                Cell::Dead
+            }
+        }
     }
 }
