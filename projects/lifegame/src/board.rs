@@ -347,45 +347,20 @@ impl Board {
     fn tick(&mut self) {
         self.tick_count += 1;
 
-        let width = self.num_grid_per_row;
-        let mut alive = 0;
-        let mut dead = 0;
-
-        for y in 0..width {
-            for x in 0..width {
-                let alive_count = self.count_alive_neighbors(&self.current, x, y);
-                let index = self.index(x, y);
-                match self.current[index] {
-                    Cell::Alive => {
-                        alive += 1;
-                        if alive_count == 2 || alive_count == 3 {
-                            self.next[index] = Cell::Alive;
-                            continue;
-                        }
-                    }
-                    Cell::Dead => {
-                        dead += 1;
-                        if alive_count == 3 {
-                            self.next[index] = Cell::Alive;
-                            continue;
-                        }
-                    }
-                }
-                self.next[index] = Cell::Dead;
-                // match (alive_count, self.current[index]) {
-                //     (3, Cell::Dead) => {
-                //         self.next[index] = Cell::Alive;
-
-                //     }
-                //     (2 | 3, Cell::Alive) => {
-                //         self.next[index] = Cell::Alive;
-                //     }
-                //     (_, _) => {
-                //         self.next[index] = Cell::Dead;
-                //     }
-                // }
-            }
-        }
+        let (alive, dead) = match self.rule {
+            Rule::ConwaysGameOfLife => Rule::conways_game_of_life(self),
+            Rule::HighLife          => Rule::high_life(self),
+            Rule::Seeds             => Rule::seeds(self),
+            Rule::Maze              => Rule::maze(self),
+            Rule::Mazectric         => Rule::mazectric(self),
+            Rule::Replicator        => Rule::replicator(self),
+            Rule::DayAndNight       => Rule::day_and_night(self),
+            Rule::Morley            => Rule::morley(self),
+            Rule::TwoxTwo           => Rule::two_x_two(self),
+            Rule::Walling           => Rule::walling(self),
+            Rule::Vreeland          => Rule::vreeland(self),
+            Rule::LiveFreeOrDie     => Rule::live_free_or_die(self),
+        };
 
         self.alive_dead_count = (alive, dead);
         std::mem::swap(&mut self.current, &mut self.next);
@@ -410,5 +385,155 @@ impl Board {
                 self.next_tick = false;
             }
         }
+    }
+}
+
+impl Rule {
+    fn conways_game_of_life(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        for y in 0..width {
+            for x in 0..width {
+                let alive_count = board.count_alive_neighbors(&board.current, x, y);
+                let index = board.index(x, y);
+                
+                board.next[index] = match board.current[index] {
+                    Cell::Alive => {
+                        alive += 1;
+                        if alive_count == 2 || alive_count == 3 {
+                            Cell::Alive
+                        } else {
+                            Cell::Dead
+                        }
+                    }
+                    Cell::Dead => {
+                        dead += 1;
+                        if alive_count == 3 {
+                            Cell::Alive
+                        } else {
+                            Cell::Dead
+                        }
+                    }
+                }
+            }
+        }
+
+        (alive, dead)
+    }
+
+    fn high_life(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        for y in 0..width {
+            for x in 0..width {
+                let alive_count = board.count_alive_neighbors(&board.current, x, y);
+                let index = board.index(x, y);
+                
+                board.next[index] = match board.current[index] {
+                    Cell::Alive => {
+                        alive += 1;
+                        if alive_count == 2 || alive_count == 3 {
+                            Cell::Alive
+                        } else {
+                            Cell::Dead
+                        }
+                    }
+                    Cell::Dead => {
+                        dead += 1;
+                        if alive_count == 3 || alive_count == 6 {
+                            Cell::Alive
+                        } else {
+                            Cell::Dead
+                        }
+                    }
+                }
+            }
+        }
+
+        (alive, dead)   
+    }
+    
+    fn seeds(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn maze(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn mazectric(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn replicator(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn day_and_night(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn morley(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn two_x_two(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn walling(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn vreeland(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
+    }
+
+    fn live_free_or_die(board: &mut Board) -> (u64, u64) {
+        let width = board.num_grid_per_row;
+        let mut alive = 0;
+        let mut dead = 0;
+
+        (alive, dead)
     }
 }
