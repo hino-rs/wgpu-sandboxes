@@ -6,6 +6,7 @@ pub struct Ca {
     pub color_of_1: [f32; 3],
     pub color_of_0: [f32; 3],
     pub circulation: bool,
+    pub stay: bool,
 }
 
 impl Ca {
@@ -32,8 +33,8 @@ impl Ca {
 
         for i in 0..current_num_of_bits {
             let center = current_last_bits[i];
-            let mut left = 0;
-            let mut right = 0;
+            let left;
+            let right;
 
             if self.circulation {
                 left = if i != 0 {
@@ -72,6 +73,11 @@ impl Ca {
         //     next_bits.push(next as u8);
         // }
 
-        self.cells.append(&mut next_bits);
+
+        if self.stay {
+            self.cells = next_bits;
+        } else {
+            self.cells.append(&mut next_bits);
+        }
     }
 }

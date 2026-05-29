@@ -54,6 +54,7 @@ impl ApplicationHandler for App {
             color_of_1: [1.0, 1.0, 1.0],
             color_of_0: [0.0, 0.0, 0.0],
             circulation: false,
+            stay: false,
         };
 
         self.window = Some(window);
@@ -123,6 +124,7 @@ impl ApplicationHandler for App {
                         }
 
                         ui.checkbox(&mut ca.circulation, "Circulation");
+                        ui.checkbox(&mut ca.stay, "Stay");
 
                         ui.label("Num Of Bits");
                         if ui
