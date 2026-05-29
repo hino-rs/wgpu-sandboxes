@@ -305,11 +305,6 @@ impl App {
                 ui.selectable_value(&mut board.rule, Rule::Walling, Rule::to_text(Rule::Walling));
                 ui.selectable_value(
                     &mut board.rule,
-                    Rule::Vreeland,
-                    Rule::to_text(Rule::Vreeland),
-                );
-                ui.selectable_value(
-                    &mut board.rule,
                     Rule::LiveFreeOrDie,
                     Rule::to_text(Rule::LiveFreeOrDie),
                 );
