@@ -58,7 +58,7 @@
 
         .card {
             background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
+            border: 1px solid coral;
             border-radius: 12px;
             padding: 24px;
             text-decoration: none;
@@ -77,14 +77,15 @@
             left: 0;
             width: 100%;
             height: 4px;
-            background: linear-gradient(90deg, #58a6ff, #bc8cff);
+            /* background: linear-gradient(90deg, #58a6ff, #bc8cff); */
+            background-color: orangered;
             opacity: 0;
             transition: opacity 0.2s ease-in-out;
         }
 
         .card:hover {
             transform: translateY(-4px);
-            border-color: var(--accent-color);
+            /* border-color: var(--accent-color); */
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
         }
 
@@ -122,11 +123,13 @@
             <a href="./projects/wolfram_ca/" class="card">
                 <h2>Wolfram CA Simulator</h2>
                 <p>An interactive Elementary cellular automaton that allows dynamic changes to colors and rules.</p>
+                <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/lifegame/src">source</a>
             </a>
 
             <a href="./projects/lifegame/" class="card">
                 <h2>LifeGame Simulator</h2>
                 <p>An interactive Game of Life simulator that allows dynamic changes to colors and rules.</p>
+                <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/wolfram_ca/src">source</a>
             </a>
 
 
