@@ -3,6 +3,7 @@ use std::sync::Arc;
 use egui::Context as EguiContext;
 use egui_winit::State as EguiState;
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
+use web_time::Instant;
 
 use crate::{
     ca::Ca,
@@ -18,6 +19,8 @@ pub struct App {
     ca: Option<Ca>,
     egui_ctx: EguiContext,
     egui_state: Option<EguiState>,
+    last_update_time: Option<Instant>,
+    delay: u8,
 }
 
 impl ApplicationHandler for App {
@@ -61,6 +64,8 @@ impl ApplicationHandler for App {
         self.state = Some(state);
         self.ca = Some(ca);
         self.egui_state = Some(egui_state);
+        self.last_update_time = Some(Instant::now());
+        self.delay = 0;
     }
 
     fn window_event(
@@ -89,12 +94,19 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let (Some(window), Some(state), Some(ca), Some(egui_state)) = (
+                if let (Some(window), Some(state), Some(ca), Some(egui_state), Some(last_update_time)) = (
                     &mut self.window,
                     &mut self.state,
                     &mut self.ca,
                     &mut self.egui_state,
+                    &mut self.last_update_time,
                 ) {
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(*last_update_time);
+                    if elapsed.as_millis() >= self.delay as u128 {
+                        ca.append_next();
+                        *last_update_time = now;
+                    }
                     let raw_input = egui_state.take_egui_input(window);
                     self.egui_ctx.begin_pass(raw_input);
 
@@ -125,6 +137,12 @@ impl ApplicationHandler for App {
 
                         ui.checkbox(&mut ca.circulation, "Circulation");
                         ui.checkbox(&mut ca.stay, "Stay");
+
+                        ui.label("Delay");
+                        ui.add(
+                            egui::Slider::new(&mut self.delay, 0..=u8::MAX)
+                                .custom_formatter(|val, _| format!("{val}msec")),
+                        );
 
                         ui.label("Num Of Bits");
                         if ui
@@ -175,7 +193,6 @@ impl ApplicationHandler for App {
                     state.render(&paint_jobs, &screen_descripter);
 
                     window.request_redraw();
-                    ca.append_next();
                 }
             }
 
