@@ -116,10 +116,10 @@ impl ApplicationHandler for App {
                         ui.heading("Boids Control Panel");
                         ui.separator();
 
-                        ui.checkbox(&mut boids.pause, "Pause (一時停止)");
+                        ui.checkbox(&mut boids.pause, "Pause");
                         ui.add(egui::Slider::new(&mut boids.delay, 0..=100).text("Frame Delay (ms)"));
                         if boids.pause {
-                            if ui.button("Step 1 Frame (1フレーム進む)").clicked() {
+                            if ui.button("Step 1 Frame").clicked() {
                                 boids.next_tick = true;
                             }
                         }
@@ -129,31 +129,31 @@ impl ApplicationHandler for App {
 
                         ui.add(
                             egui::Slider::new(&mut boids.params.visual_range, 0.01..=0.5)
-                                .text("Visual Range (視野の広さ)"),
+                                .text("Visual Range"),
                         );
                         ui.add(
                             egui::Slider::new(&mut boids.params.protected_range, 0.005..=0.1)
-                                .text("Protected Range (衝突回避距離)"),
+                                .text("Protected Range"),
                         );
                         ui.add(
                             egui::Slider::new(&mut boids.params.separation_weight, 0.0..=5.0)
-                                .text("Separation Weight (分離の重み)"),
+                                .text("Separation Weight"),
                         );
                         ui.add(
                             egui::Slider::new(&mut boids.params.alignment_weight, 0.0..=3.0)
-                                .text("Alignment Weight (整列の重み)"),
+                                .text("Alignment Weight"),
                         );
                         ui.add(
                             egui::Slider::new(&mut boids.params.cohesion_weight, 0.0..=3.0)
-                                .text("Cohesion Weight (結合の重み)"),
+                                .text("Cohesion Weight"),
                         );
                         ui.add(
                             egui::Slider::new(&mut boids.params.max_speed, 0.005..=0.1)
-                                .text("Max Speed (最高速度)"),
+                                .text("Max Speed"),
                         );
                         ui.add(
                             egui::Slider::new(&mut boids.params.min_speed, 0.0..=0.05)
-                                .text("Min Speed (最低速度)"),
+                                .text("Min Speed"),
                         );
                     });
 
@@ -195,3 +195,30 @@ impl ApplicationHandler for App {
     }
 }
 
+impl App {
+    pub fn with_precreated(window: Arc<Window>, state: State) -> Self {
+        let egui_ctx = EguiContext::default();
+        let egui_state = EguiState::new(
+            egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        );
+
+        Self {
+            window: Some(window),
+            gpu: Some(state),
+            egui_ctx,
+            egui_state: Some(egui_state),
+            last_update_time: Some(Instant::now()),
+            boids: Some(Boids {
+                pause: false,
+                delay: 16,
+                next_tick: false,
+                params: crate::boids::BoidsParams::default(),
+                })
+        }
+    }
+}

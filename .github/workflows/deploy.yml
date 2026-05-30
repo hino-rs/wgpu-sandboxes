@@ -36,7 +36,7 @@ jobs:
 
       - name: Build with Trunk
         run: |
-          for project in lifegame wolfram_ca; do
+          for project in lifegame wolfram_ca boids; do
             echo "::group::Building $project"
             cd "projects/$project"
             trunk build --release --public-url "/${{ github.event.repository.name }}/projects/$project/"
@@ -48,7 +48,7 @@ jobs:
         run: |
           mkdir -p deploy_out
           cp index.html deploy_out/
-          for project in lifegame wolfram_ca; do
+          for project in lifegame wolfram_ca boids; do
             mkdir -p "deploy_out/projects/$project"
             cp -r "projects/$project/dist/"* "deploy_out/projects/$project/"
           done
