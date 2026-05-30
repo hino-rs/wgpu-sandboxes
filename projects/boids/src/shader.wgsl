@@ -22,6 +22,7 @@ struct VertexOutput {
 @vertex fn vs_main(model: VertexInput, instance: BoidInput) -> VertexOutput {
     var out: VertexOutput;
 
+    // 速度から角度を求めて回転する
     let angle = atan2(instance.boid_vel.y, instance.boid_vel.x);
     let rotation = mat2x2<f32>(
         cos(angle), -sin(angle),
@@ -32,7 +33,16 @@ struct VertexOutput {
     let final_pos = rotated_pos + instance.boid_pos;
 
     out.clip_position = vec4f(final_pos, 0.0, 1.0);
-    out.color = model.color;
+
+    let speed = length(instance.boid_vel);
+    let min_s = 0.01;
+    let max_s = 0.03;
+    let t = clamp((speed - min_s) / (max_s - min_s), 0.0, 1.0);
+
+    let color_slow = vec3f(0.0, 0.2, 1.0);
+    let color_fast = vec3f(1.0, 0.0, 0.8);
+
+    out.color = mix(color_slow, color_fast, t);
 
     return out;
 }
@@ -137,5 +147,8 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if (boid.position.x < -1.0) { boid.position.x = 1.0; }
     if (boid.position.y > 1.0) { boid.position.y = -1.0; }
     if (boid.position.y < -1.0) { boid.position.y = 1.0; }
+
+    
+
     boids_dst[index] = boid;
 }
