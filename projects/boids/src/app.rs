@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use crate::boids::{Boids, INITIAL_NUM_BOIDS};
+use crate::gpu::State;
 use egui::Context as EguiContext;
 use egui_plot::{Legend, Line, Plot, PlotPoints};
 use egui_winit::State as EguiState;
-use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 use web_time::Instant;
-use crate::gpu::State;
-use crate::boids::Boids;
+use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
 
 #[derive(Default)]
 pub struct App {
@@ -50,6 +50,7 @@ impl ApplicationHandler for App {
             delay: 16,
             next_tick: false,
             params: crate::boids::BoidsParams::default(),
+            num_boids: INITIAL_NUM_BOIDS,
         });
     }
 
@@ -84,7 +85,13 @@ impl ApplicationHandler for App {
             //     is_synthetic,
             // } => {}
             WindowEvent::RedrawRequested => {
-                if let (Some(gpu), Some(window), Some(egui_state), Some(last_update_time), Some(boids)) = (
+                if let (
+                    Some(gpu),
+                    Some(window),
+                    Some(egui_state),
+                    Some(last_update_time),
+                    Some(boids),
+                ) = (
                     &mut self.gpu,
                     &mut self.window,
                     &mut self.egui_state,
@@ -98,12 +105,12 @@ impl ApplicationHandler for App {
                     let elapsed = now.duration_since(*last_update_time);
                     if !boids.pause {
                         if elapsed.as_millis() >= boids.delay as u128 {
-                            gpu.update_boids();
+                            gpu.update_boids(boids.num_boids);
                             *last_update_time = now;
                         }
                     } else {
                         if boids.next_tick {
-                            gpu.update_boids();
+                            gpu.update_boids(boids.num_boids);
                             boids.next_tick = false;
                             *last_update_time = now;
                         }
@@ -117,11 +124,19 @@ impl ApplicationHandler for App {
                         ui.separator();
 
                         ui.checkbox(&mut boids.pause, "Pause");
-                        ui.add(egui::Slider::new(&mut boids.delay, 0..=100).text("Frame Delay (ms)"));
+                        ui.add(
+                            egui::Slider::new(&mut boids.delay, 0..=100).text("Frame Delay (ms)"),
+                        );
                         if boids.pause {
                             if ui.button("Step 1 Frame").clicked() {
                                 boids.next_tick = true;
                             }
+                        }
+
+                        if ui.add(
+                            egui::Slider::new(&mut boids.num_boids, 1..=150000).text("Num Boids"),
+                        ).changed() {
+                            boids.change_num_boids(gpu);
                         }
 
                         ui.separator();
@@ -161,12 +176,8 @@ impl ApplicationHandler for App {
                     egui_state.handle_platform_output(window, egui_output.platform_output);
 
                     for (id, image_delta) in &egui_output.textures_delta.set {
-                        gpu.egui_renderer.update_texture(
-                            &gpu.device,
-                            &gpu.queue,
-                            *id,
-                            image_delta,
-                        );
+                        gpu.egui_renderer
+                            .update_texture(&gpu.device, &gpu.queue, *id, image_delta);
                     }
 
                     for id in &egui_output.textures_delta.free {
@@ -182,7 +193,7 @@ impl ApplicationHandler for App {
                         pixels_per_point: egui_output.pixels_per_point,
                     };
 
-                    gpu.render(&paint_jobs, &screen_descripter);
+                    gpu.render(&paint_jobs, &screen_descripter, boids.num_boids);
                 }
 
                 if let Some(window) = &self.window {
@@ -218,7 +229,8 @@ impl App {
                 delay: 16,
                 next_tick: false,
                 params: crate::boids::BoidsParams::default(),
-                })
+                num_boids: INITIAL_NUM_BOIDS,
+            }),
         }
     }
 }

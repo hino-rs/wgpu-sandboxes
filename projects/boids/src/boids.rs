@@ -1,4 +1,8 @@
-const INITIAL_NUM_BOIDS: usize = 1500;
+use wgpu::util::DeviceExt;
+
+use crate::gpu::State;
+
+pub const INITIAL_NUM_BOIDS: usize = 1500;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -33,6 +37,7 @@ pub struct Boids {
     pub delay: u64,
     pub next_tick: bool,
     pub params: BoidsParams,
+    pub num_boids: usize,
 }
 
 #[repr(C)]
@@ -49,10 +54,77 @@ pub struct BoidsBuffers {
 }
 
 impl Boids {
-    pub fn generate_initial_boids() -> Vec<Boid> {
-        let mut boids = Vec::with_capacity(INITIAL_NUM_BOIDS);
-        
-        for _ in 0..INITIAL_NUM_BOIDS {
+    pub fn change_num_boids(&self, gpu: &mut State) {
+        let new_boids = Self::generate_boids(self.num_boids);
+
+        let buffer_a = gpu.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Boids Buffer A"),
+                contents: bytemuck::cast_slice(&new_boids),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+        let buffer_b = gpu.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Boids Buffer B"),
+                contents: bytemuck::cast_slice(&new_boids),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+
+        let boids_buffers = crate::boids::BoidsBuffers {
+            buffer_a,
+            buffer_b,
+            frame_count: 0,
+        };
+
+        let compute_bind_group_a = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Compute Bind Group A"),
+            layout: &gpu.compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: boids_buffers.buffer_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: boids_buffers.buffer_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: gpu.params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let compute_bind_group_b = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Compute Bind Group B"),
+            layout: &gpu.compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: boids_buffers.buffer_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: boids_buffers.buffer_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: gpu.params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        gpu.boids_buffers = boids_buffers;
+        gpu.compute_bind_group_a = compute_bind_group_a;
+        gpu.compute_bind_group_b = compute_bind_group_b;
+    }
+
+    fn generate_boids(num: usize) -> Vec<Boid> {
+        let mut boids = Vec::with_capacity(num);
+
+        for _ in 0..num {
             boids.push(Boid {
                 position: [
                     rand::random_range(-1.0..=1.0),
@@ -68,12 +140,8 @@ impl Boids {
         boids
     }
 
-    pub fn update(&mut self) {
-
-    }
-
-    pub fn tick(&mut self) {
-
+    pub fn generate_initial_boids() -> Vec<Boid> {
+        Self::generate_boids(INITIAL_NUM_BOIDS)
     }
 }
 

@@ -15,10 +15,11 @@ pub struct State {
     pub egui_renderer: EguiRenderer,
     bg_color: [f32; 3],
     compute_pipeline: wgpu::ComputePipeline,
-    boids_buffers: crate::boids::BoidsBuffers,
-    compute_bind_group_a: wgpu::BindGroup,
-    compute_bind_group_b: wgpu::BindGroup,
+    pub boids_buffers: crate::boids::BoidsBuffers,
+    pub compute_bind_group_a: wgpu::BindGroup,
+    pub compute_bind_group_b: wgpu::BindGroup,
     pub params_buffer: wgpu::Buffer,
+    pub compute_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 pub const TRIANGLE: &[Vertex] = &[
@@ -299,7 +300,6 @@ impl State {
             ],
         });
 
-
         let egui_renderer = EguiRenderer::new(
             &device,
             config.format,
@@ -320,6 +320,7 @@ impl State {
             compute_bind_group_a,
             compute_bind_group_b,
             params_buffer,
+            compute_bind_group_layout,
         }
     }
 
@@ -327,7 +328,7 @@ impl State {
         self.queue.write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[*params]));
     }
 
-    pub fn update_boids(&mut self) {
+    pub fn update_boids(&mut self, num_boids: usize) {
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Compute Encoder"),
         });
@@ -344,9 +345,9 @@ impl State {
                 &self.compute_bind_group_b
             };
             compute_pass.set_bind_group(0, bind_group, &[]);
-            // 計算を実行 (1500体をワークグループサイズ64で割って切り上げ)
-            let workgroup_count = (1500 + 63) / 64; 
-            compute_pass.dispatch_workgroups(workgroup_count, 1, 1);
+            // 計算を実行 (boid数をワークグループサイズ64で割って切り上げ)
+            let workgroup_count = (num_boids + 63) / 64; 
+            compute_pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
         }
         // コマンドを送信してGPUで実行
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -354,7 +355,7 @@ impl State {
         self.boids_buffers.frame_count += 1;
     }
 
-    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
+    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor, num_boids: usize) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated |
@@ -416,7 +417,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, src.slice(..));
-            render_pass.draw(0..3, 0..1500);
+            render_pass.draw(0..3, 0..num_boids as u32);
         }
 
         {
