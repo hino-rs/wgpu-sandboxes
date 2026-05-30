@@ -134,7 +134,7 @@ impl ApplicationHandler for App {
                         }
 
                         if ui.add(
-                            egui::Slider::new(&mut boids.num_boids, 1..=150000).text("Num Boids"),
+                            egui::Slider::new(&mut boids.num_boids, 1..=32768).text("Num Boids"),
                         ).changed() {
                             boids.change_num_boids(gpu);
                         }
