@@ -256,6 +256,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "boids"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "egui_plot",
+ "env_logger",
+ "log",
+ "pollster",
+ "rand",
+ "web-time",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
