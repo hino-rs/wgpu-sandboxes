@@ -24,16 +24,16 @@ pub struct State {
 
 pub const TRIANGLE: &[Vertex] = &[
     Vertex {
-        position: [0.0, 1.0, 0.0],
-        color: [0.0, 1.0, 1.0],
+        position: [1.5, 0.0, 0.0],
+        color: [1.0, 1.0, 1.0, 1.0],
     },
     Vertex {
-        position: [-1.0, -1.0, 0.0],
-        color: [0.0, 1.0, 1.0],
+        position: [-1.0, 0.5, 0.0],
+        color: [1.0, 1.0, 1.0, 0.0],
     },
     Vertex {
-        position: [1.0, -1.0, 0.0],
-        color: [0.0, 1.0, 1.0],
+        position: [-1.0, -0.5, 0.0],
+        color: [1.0, 1.0, 1.0, 0.0],
     },
 ];
 
@@ -41,7 +41,7 @@ pub const TRIANGLE: &[Vertex] = &[
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     position: [f32; 3],
-    color:    [f32; 3],
+    color:    [f32; 4],
 }
 
 impl Vertex {
@@ -50,7 +50,7 @@ impl Vertex {
 
         const ATTRIBUTES: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
             0 => Float32x3,
-            1 => Float32x3,
+            1 => Float32x4,
         ];
 
         wgpu::VertexBufferLayout {
@@ -135,7 +135,7 @@ impl State {
             entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: config.format,
-                blend: Some(wgpu::BlendState::REPLACE),
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: Default::default(),

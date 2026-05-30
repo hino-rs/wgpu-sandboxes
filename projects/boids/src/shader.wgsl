@@ -3,7 +3,7 @@
 // -----------------------------------------
 struct VertexInput {
     @location(0) position: vec3f,
-    @location(1) color: vec3f,
+    @location(1) color: vec4f,
 }
 
 struct BoidInput {
@@ -13,7 +13,7 @@ struct BoidInput {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
-    @location(0) color: vec3f,
+    @location(0) color: vec4f,
 }
 
 // -----------------------------------------
@@ -42,13 +42,15 @@ struct VertexOutput {
     let color_slow = vec3f(0.0, 0.2, 1.0);
     let color_fast = vec3f(1.0, 0.0, 0.8);
 
-    out.color = mix(color_slow, color_fast, t);
+    let final_rgb = mix(color_slow, color_fast, t);
+
+    out.color = vec4f(final_rgb, model.color.a);
 
     return out;
 }
 
 @fragment fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    return vec4f(in.color, 1.0);
+    return in.color;
 }
 
 // -----------------------------------------
