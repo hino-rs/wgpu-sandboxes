@@ -1,0 +1,20 @@
+[package]
+name = "fake_water"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wgpu.workspace = true
+bytemuck.workspace = true
+env_logger.workspace = true
+log.workspace = true
+pollster.workspace = true
+winit.workspace = true
+rand.workspace = true
+egui-wgpu.workspace = true
+egui.workspace = true
+egui_plot.workspace = true
+web-time = "1.1.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+egui-winit.workspace = true
