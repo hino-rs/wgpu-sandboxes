@@ -1,6 +1,15 @@
 // -----------------------------------------
 // 共通データ構造
 // -----------------------------------------
+struct RenderParams {
+    num_boids: u32,
+    aspect_ratio: f32,
+    use_trails: u32,
+    _p: u32
+}
+
+@group(0) @binding(0) var<uniform> render_params: RenderParams;
+
 struct VertexInput {
     @location(0) position: vec3f,
     @location(1) color: vec4f,
@@ -19,8 +28,13 @@ struct VertexOutput {
 // -----------------------------------------
 // Render Pipeline用シェーダー
 // -----------------------------------------
-@vertex fn vs_main(model: VertexInput, instance: BoidInput) -> VertexOutput {
+@vertex fn vs_main(model: VertexInput, instance: BoidInput, @builtin(instance_index) instance_idx: u32) -> VertexOutput {
     var out: VertexOutput;
+
+    let num_boids = render_params.num_boids;
+    let generation = f32(instance_idx / num_boids);
+
+    let size_scale = 1.0 - (generation * 0.04);
 
     // 速度から角度を求めて回転する
     let angle = atan2(instance.boid_vel.y, instance.boid_vel.x);
@@ -29,7 +43,10 @@ struct VertexOutput {
         sin(angle), cos(angle),
     );
 
-    let rotated_pos = rotation * (model.position.xy * 0.01);
+    var rotated_pos = rotation * (model.position.xy * 0.01 * size_scale);
+
+    rotated_pos.x = rotated_pos.x / render_params.aspect_ratio;
+
     let final_pos = rotated_pos + instance.boid_pos;
 
     out.clip_position = vec4f(final_pos, 0.0, 1.0);
@@ -44,7 +61,13 @@ struct VertexOutput {
 
     let final_rgb = mix(color_slow, color_fast, t);
 
-    out.color = vec4f(final_rgb, model.color.a);
+    var trail_alpha = 1.0 - (generation * 0.06);
+
+    if (render_params.use_trails == 0u && generation >= 1.0) {
+        trail_alpha = 0.0;
+    }
+
+    out.color = vec4f(final_rgb, model.color.a * trail_alpha);
 
     return out;
 }
@@ -78,10 +101,20 @@ struct Params {
 @compute @workgroup_size(64)
 fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let index = global_id.x;
-    if (index >= arrayLength(&boids_src)) {
+
+    let num_boids = arrayLength(&boids_src) / 16u;
+
+    if (index >= num_boids) {
         return;
     }
+
     var boid = boids_src[index];
+
+    // 歴史保存
+    for (var g = 15u; g > 0u; g = g - 1u) {
+        boids_dst[index + num_boids * g] = boids_src[index + num_boids * (g - 1u)];
+    }
+
     // --- パラメータ調整 ---
     let visual_range = params.visual_range;     // 仲間を検知できる視野の広さ
     let protected_range = params.protected_range; // 衝突を避けるための至近距離
@@ -98,9 +131,9 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var pos_avg = vec2f(0.0, 0.0);
     var neighboring_boids = 0.0;
     // 全てのボイドをループでチェック
-    for (var i = 0u; i < arrayLength(&boids_src); i++) {
+    for (var i = 0u; i < num_boids; i++) {
         if (i == index) { 
-            continue; // 自分自身は無視する
+            continue; 
         }
         let other = boids_src[i];
         let d = distance(boid.position, other.position);
