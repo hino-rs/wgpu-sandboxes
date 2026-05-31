@@ -3,7 +3,7 @@ use std::sync::Arc;
 use egui::Context as EguiContext;
 use egui_winit::State as EguiState;
 use web_time::Instant;
-use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
+use winit::{application::ApplicationHandler, dpi::PhysicalPosition, event::WindowEvent, window::Window};
 
 use crate::{gpu::State, object::{Board, INITIAL_NUM_GRID_PER_ROW}};
 
@@ -16,6 +16,8 @@ pub struct App {
     egui_state: Option<EguiState>,
     current_tab: ConfigTab,
     last_update_time: Option<Instant>,
+    cursor_pos: Option<winit::dpi::PhysicalPosition<f64>>,
+    mouse_pressed: bool,
 }
 
 impl ApplicationHandler for App {
@@ -107,6 +109,49 @@ impl ApplicationHandler for App {
                         }
                     }
 
+                    if self.mouse_pressed {
+                        if let Some(pos) = &self.cursor_pos {
+                            let size = window.inner_size();
+                            let width = size.width as f64;
+                            let height = size.height as f64;
+
+                            // 座標をwgpuで扱いやすいように変換
+                            let nx = (pos.x / width) * 2.0 - 1.0;
+                            let ny = 1.0 - (pos.y / height) * 2.0;
+
+                            // グリッド座標に変換
+                            let cell_pitch = 1.6 / (board.num_grid_per_row - 1) as f64;
+                            let gx = ((nx + 0.8) / cell_pitch).round() as isize;
+                            let gy = ((ny + 0.8) / cell_pitch).round() as isize;
+
+                            // 円形ブラシで水を付与する
+                            let brush_radius = 4;
+                            for dy in -brush_radius..=brush_radius {
+                                for dx in -brush_radius..=brush_radius {
+                                    // 円の内側かチェック
+                                    if dx * dx + dy * dy <= brush_radius * brush_radius {
+                                        let tx = gx + dx;
+                                        let ty = gy + dy;
+
+                                        // グリッドの範囲内かチェック
+                                        if tx >= 0 && tx < board.num_grid_per_row as isize
+                                            && ty >= 0 && ty < board.num_grid_per_row as isize 
+                                        {
+                                            let idx = ty as usize * board.num_grid_per_row + tx as usize;
+                                            
+                                            // puddleに水を加える
+                                            board.current_squares[idx].puddle = f32::min(
+                                                1.0, 
+                                                board.current_squares[idx].puddle + 0.2
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
                     let raw_input = egui_state.take_egui_input(window);
                     self.egui_ctx.begin_pass(raw_input);
 
@@ -151,6 +196,28 @@ impl ApplicationHandler for App {
                 }
             }
 
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor_pos = Some(position);
+                // let window_size = &self.state.as_ref().unwrap().config;
+                
+                // let width = window_size.width;
+                // let height = window_size.height;
+
+                // let nx = (position.x / width as f64) * 2.0 - 1.0;
+                // let ny = 1.0 - (position.y / height as f64) * 2.0;
+
+                // self.cursor_pos = Some(PhysicalPosition {
+                //     x: nx,
+                //     y: ny,
+                // });
+            }
+
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == winit::event::MouseButton::Left {
+                    self.mouse_pressed = state.is_pressed();
+                }
+            }
+
             _ => {}
         }
     }
@@ -184,6 +251,8 @@ impl App {
             egui_ctx,
             current_tab: ConfigTab::default(),
             last_update_time: Some(Instant::now()),
+            cursor_pos: Some(PhysicalPosition::default()),
+            mouse_pressed: false,
         }
     }
 }

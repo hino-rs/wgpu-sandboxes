@@ -3,9 +3,9 @@ pub const TERRAIN_COLOR: [f32; 4]  = [0.4, 0.3, 0.2, 1.0]; // 地面の色
 pub const WATER_SHALLOW: [f32; 4]  = [0.0, 0.7, 0.8, 0.3]; // 浅い水
 pub const WATER_DEEP: [f32; 4]  = [0.0, 0.1, 0.5, 0.9]; // 深い水（濃い青）
 const NEIGHBORS: [(isize, isize); 4] = [
-        (0, -1), 
-    (-1, 0),    (1, 0),
-        (0, 1),
+         ( 0, -1), 
+    (-1,  0),  ( 1,  0),
+         ( 0,  1),
 ];
 
 pub struct Board {
@@ -29,10 +29,15 @@ impl Board {
         let mut current = Self::empty_board(grid_size);
 
         for (i, c) in current.iter_mut().enumerate() {
-            // let depth = rand::random_range(0.0..=1.0);
-            let depth = (i as f32 / num_grid_per_row as f32) / num_grid_per_row as f32;
-            println!("{depth}");
-
+            let depth = 
+                if i > (num_grid_per_row * num_grid_per_row - num_grid_per_row) {
+                    1000.0
+                } else {
+                    // let depth = rand::random_range(0.0..=1.0);
+                    ((i as f32 / num_grid_per_row as f32) / num_grid_per_row as f32) * 5.0
+                };
+            // println!("{depth}");
+                
             *c = Square {
                 depth,
                 // puddle: rand::random_range(0.0..=depth),
@@ -58,8 +63,8 @@ impl Board {
         self.next_squares = self.current_squares.clone();
 
         // パラメータ
-        let flow_rate = 0.2;     // 流速（0.0 〜 0.5: 値が大きいほど水が素早く動く）
-        let absorption = 0.05;   // 自身が最底値のときの消滅（蒸発）率（5%ずつ消える）
+        let flow_rate = 0.5;     // 流速
+        let absorption = 0.01;   // 自身が最底値のときの蒸発率
 
         for i in 0..self.current_squares.len() {
             let (x, y) = (i % self.num_grid_per_row, i / self.num_grid_per_row);
@@ -90,11 +95,11 @@ impl Board {
                 }
             }
 
-            // 2. 探索結果に基づいた水量の変化処理
+            // 探索結果に基づいた水量の変化処理
             if lowest_x == x && lowest_y == y {
                 // 自身が最も低い場合
                 if current_cell.puddle > 0.0 {
-                    // 水を徐々に減らす（完全に 0 にするか、徐々に減らすかは調整可能）
+                    // 水を徐々に減らす
                     let next_puddle = self.next_squares[i].puddle - (current_cell.puddle * absorption);
                     self.next_squares[i].puddle = f32::max(0.0, next_puddle);
                 }
@@ -122,7 +127,6 @@ impl Board {
             }
         }
 
-        // 3. バッファをスワップして現在の状態に適用
         std::mem::swap(&mut self.current_squares, &mut self.next_squares);
     }
 
