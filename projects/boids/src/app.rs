@@ -51,6 +51,7 @@ impl ApplicationHandler for App {
             next_tick: false,
             params: crate::boids::BoidsParams::default(),
             num_boids: INITIAL_NUM_BOIDS,
+            trails: true,
         });
     }
 
@@ -139,6 +140,8 @@ impl ApplicationHandler for App {
                             boids.change_num_boids(gpu);
                         }
 
+                        ui.checkbox(&mut boids.trails, "Enable Trails");
+
                         ui.separator();
                         ui.label("Boids Parameters");
 
@@ -193,7 +196,7 @@ impl ApplicationHandler for App {
                         pixels_per_point: egui_output.pixels_per_point,
                     };
 
-                    gpu.render(&paint_jobs, &screen_descripter, boids.num_boids);
+                    gpu.render(&paint_jobs, &screen_descripter, boids.num_boids, boids.trails);
                 }
 
                 if let Some(window) = &self.window {
@@ -230,6 +233,7 @@ impl App {
                 next_tick: false,
                 params: crate::boids::BoidsParams::default(),
                 num_boids: INITIAL_NUM_BOIDS,
+                trails: true,
             }),
         }
     }

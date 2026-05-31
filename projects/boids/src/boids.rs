@@ -38,6 +38,7 @@ pub struct Boids {
     pub next_tick: bool,
     pub params: BoidsParams,
     pub num_boids: usize,
+    pub trails: bool,
 }
 
 #[repr(C)]
@@ -122,7 +123,7 @@ impl Boids {
     }
 
     fn generate_boids(num: usize) -> Vec<Boid> {
-        let mut boids = Vec::with_capacity(num);
+        let mut boids = Vec::with_capacity(num * 16); // 自身に加えて、過去のデータを保存するため
 
         for _ in 0..num {
             boids.push(Boid {
@@ -134,6 +135,13 @@ impl Boids {
                     rand::random_range(-0.1..=0.1),
                     rand::random_range(-0.1..=0.1),
                 ],
+            });
+        }
+
+        for _ in 0..(num * 15) { // 過去15世代分
+            boids.push(Boid {
+                position: [0.0, 0.0],
+                velocity: [0.0, 0.0],
             });
         }
 

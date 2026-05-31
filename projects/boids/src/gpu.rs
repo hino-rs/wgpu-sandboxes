@@ -1,17 +1,17 @@
-use std::sync::Arc;
-use winit::window::Window;
-use wgpu::util::DeviceExt;
 use egui_wgpu::{Renderer as EguiRenderer, RendererOptions};
+use std::sync::Arc;
+use wgpu::util::DeviceExt;
+use winit::window::Window;
 
 use crate::boids::{Boid, Boids};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
-    pub device:  wgpu::Device,
-    pub queue:   wgpu::Queue,
-    pub config:  wgpu::SurfaceConfiguration,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer:   wgpu::Buffer,
+    vertex_buffer: wgpu::Buffer,
     pub egui_renderer: EguiRenderer,
     bg_color: [f32; 3],
     compute_pipeline: wgpu::ComputePipeline,
@@ -20,6 +20,17 @@ pub struct State {
     pub compute_bind_group_b: wgpu::BindGroup,
     pub params_buffer: wgpu::Buffer,
     pub compute_bind_group_layout: wgpu::BindGroupLayout,
+    render_params_buffer: wgpu::Buffer,
+    render_bind_group: wgpu::BindGroup,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct RenderParams {
+    pub num_boids: u32,
+    pub aspect_ratio: f32,
+    pub use_trails: u32,
+    pub _p: u32,
 }
 
 pub const TRIANGLE: &[Vertex] = &[
@@ -41,7 +52,7 @@ pub const TRIANGLE: &[Vertex] = &[
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     position: [f32; 3],
-    color:    [f32; 4],
+    color: [f32; 4],
 }
 
 impl Vertex {
@@ -116,10 +127,26 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
+        let render_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Render Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[Some(&render_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -167,30 +194,28 @@ impl State {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(TRIANGLE),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(TRIANGLE),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
         let initial_data = Boids::generate_initial_boids();
 
-        let buffer_a = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Boids Buffer A"),
-                contents: bytemuck::cast_slice(&initial_data),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            }
-        );
-        let buffer_b = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Boids Buffer B"),
-                contents: bytemuck::cast_slice(&initial_data),
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            }
-        );
+        let buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Boids Buffer A"),
+            contents: bytemuck::cast_slice(&initial_data),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::VERTEX
+                | wgpu::BufferUsages::COPY_DST,
+        });
+        let buffer_b = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Boids Buffer B"),
+            contents: bytemuck::cast_slice(&initial_data),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::VERTEX
+                | wgpu::BufferUsages::COPY_DST,
+        });
 
         let boids_buffers = crate::boids::BoidsBuffers {
             buffer_a,
@@ -198,58 +223,58 @@ impl State {
             frame_count: 0,
         };
 
-        let params_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Boids Params Buffer"),
-                contents: bytemuck::cast_slice(&[crate::boids::BoidsParams::default()]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            }
-        );
-
-        let compute_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Compute Bind Group Layout"),
-            entries: &[
-                // Binding 0: 読み取り専用のSrcバッファ
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // Binding 1: 書き込み可能なDstバッファ
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // Binding 2: パラメータ用Uniformバッファ
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
+        let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Boids Params Buffer"),
+            contents: bytemuck::cast_slice(&[crate::boids::BoidsParams::default()]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Compute Pipeline Layout"),
-            bind_group_layouts: &[Some(&compute_bind_group_layout)],
-            immediate_size: 0,
-        });
+        let compute_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Compute Bind Group Layout"),
+                entries: &[
+                    // Binding 0: 読み取り専用のSrcバッファ
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 1: 書き込み可能なDstバッファ
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 2: パラメータ用Uniformバッファ
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let compute_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Compute Pipeline Layout"),
+                bind_group_layouts: &[Some(&compute_bind_group_layout)],
+                immediate_size: 0,
+            });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Compute Pipeline"),
@@ -300,11 +325,31 @@ impl State {
             ],
         });
 
-        let egui_renderer = EguiRenderer::new(
-            &device,
-            config.format,
-            RendererOptions::default(),
+        let initial_render_params = RenderParams {
+            num_boids: crate::boids::INITIAL_NUM_BOIDS as u32,
+            aspect_ratio: size.width as f32 / size.height as f32,
+            use_trails: 1,
+            _p: 0,
+        };
+        let render_params_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Render Params Buffer"),
+                contents: bytemuck::cast_slice(&[initial_render_params]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            }
         );
+        let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Render Bind Group"),
+            layout: &render_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: render_params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let egui_renderer = EguiRenderer::new(&device, config.format, RendererOptions::default());
 
         Self {
             surface,
@@ -314,24 +359,29 @@ impl State {
             render_pipeline,
             vertex_buffer,
             egui_renderer,
-            bg_color: [0.05, 0.05, 0.1],
+            bg_color: [0.0, 0.0, 0.0],
             compute_pipeline,
             boids_buffers,
             compute_bind_group_a,
             compute_bind_group_b,
             params_buffer,
             compute_bind_group_layout,
+            render_params_buffer,
+            render_bind_group,
         }
     }
 
     pub fn update_params(&mut self, params: &crate::boids::BoidsParams) {
-        self.queue.write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[*params]));
+        self.queue
+            .write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[*params]));
     }
 
     pub fn update_boids(&mut self, num_boids: usize) {
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Compute Encoder"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Compute Encoder"),
+            });
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Compute Pass"),
@@ -346,7 +396,7 @@ impl State {
             };
             compute_pass.set_bind_group(0, bind_group, &[]);
             // 計算を実行 (boid数をワークグループサイズ64で割って切り上げ)
-            let workgroup_count = (num_boids + 63) / 64; 
+            let workgroup_count = (num_boids + 63) / 64;
             compute_pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
         }
         // コマンドを送信してGPUで実行
@@ -355,11 +405,16 @@ impl State {
         self.boids_buffers.frame_count += 1;
     }
 
-    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor, num_boids: usize) {
+    pub fn render(
+        &mut self,
+        paint_jobs: &[egui::epaint::ClippedPrimitive],
+        screen_descriptor: &egui_wgpu::ScreenDescriptor,
+        num_boids: usize,
+        use_trails: bool,
+    ) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Outdated |
-            wgpu::CurrentSurfaceTexture::Lost => {
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface.configure(&self.device, &self.config);
                 return;
             }
@@ -367,22 +422,37 @@ impl State {
                 self.surface.configure(&self.device, &self.config);
                 frame
             }
-            wgpu::CurrentSurfaceTexture::Timeout |
-            wgpu::CurrentSurfaceTexture::Occluded |
-            wgpu::CurrentSurfaceTexture::Validation => { return; }
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                return;
+            }
         };
 
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        let aspect_ratio = self.config.width as f32 / self.config.height as f32;
+        let render_params = RenderParams {
+            num_boids: num_boids as u32,
+            aspect_ratio,
+            use_trails: if use_trails { 1 } else { 0 },
+            _p: 0,
+        };
+        self.queue.write_buffer(&self.render_params_buffer, 0, bytemuck::cast_slice(&[render_params]));
 
         self.egui_renderer.update_buffers(
-            &self.device, 
-            &self.queue, 
-            &mut encoder, 
-            paint_jobs, 
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            paint_jobs,
             screen_descriptor,
         );
 
@@ -392,7 +462,7 @@ impl State {
             b: self.bg_color[2] as f64,
             a: 1.0,
         };
-        
+
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -415,30 +485,34 @@ impl State {
             let (src, _dst) = self.boids_buffers.get_buffers();
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.render_bind_group, &[]); 
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, src.slice(..));
-            render_pass.draw(0..3, 0..num_boids as u32);
+            render_pass.draw(0..3, 0..(num_boids * 16) as u32);
         }
 
         {
-            let mut egui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("egui Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load, 
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None
-            }).forget_lifetime();
+            let mut egui_pass = encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("egui Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                })
+                .forget_lifetime();
 
-            self.egui_renderer.render(&mut egui_pass, paint_jobs, screen_descriptor);
+            self.egui_renderer
+                .render(&mut egui_pass, paint_jobs, screen_descriptor);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
