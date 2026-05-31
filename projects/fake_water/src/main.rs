@@ -2,6 +2,7 @@ mod app;
 mod gpu;
 mod object;
 mod utils;
+mod config;
 
 use app::App;
 use winit::event_loop::EventLoop;

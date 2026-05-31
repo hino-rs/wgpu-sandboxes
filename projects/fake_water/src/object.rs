@@ -1,4 +1,4 @@
-pub const INITIAL_NUM_GRID_PER_ROW: usize = 128;
+pub const INITIAL_NUM_GRID_PER_ROW: usize = 256;
 pub const TERRAIN_COLOR: [f32; 4]  = [0.4, 0.3, 0.2, 1.0]; // 地面の色
 pub const WATER_SHALLOW: [f32; 4]  = [0.0, 0.7, 0.8, 0.3]; // 浅い水
 pub const WATER_DEEP: [f32; 4]  = [0.0, 0.1, 0.5, 0.9]; // 深い水（濃い青）
@@ -135,13 +135,13 @@ impl Board {
         std::mem::swap(&mut self.current_squares, &mut self.next_squares);
     }
 
-
     pub fn update(&mut self) {
         self.step();
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[repr(C)]
+#[derive(Clone, Copy, Default, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct Square {
     pub puddle: f32,
     pub depth: f32,

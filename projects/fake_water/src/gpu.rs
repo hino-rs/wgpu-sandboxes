@@ -6,7 +6,24 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 use egui_wgpu::Renderer as EguiRenderer;
 
-use crate::object::{INITIAL_NUM_GRID_PER_ROW, InstanceRaw, SQUARE, Square, TERRAIN_COLOR, Vertex, WATER_DEEP, WATER_SHALLOW};
+use crate::object::{Board, INITIAL_NUM_GRID_PER_ROW, InstanceRaw, SQUARE, Square, TERRAIN_COLOR, Vertex, WATER_DEEP, WATER_SHALLOW};
+
+pub struct SimBuffers {
+    pub buffer_a: wgpu::Buffer,
+    pub buffer_b: wgpu::Buffer,
+    pub frame_count: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct BrushUniform {
+    pub pos_x: f32,
+    pub pos_y: f32,
+    pub radius: f32,
+    pub strength: f32,
+    pub is_active: u32,
+    pub _pad: [u32; 3], // 16-byte alignment padding
+}
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -19,6 +36,16 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     pub num_instances: u32,
     pub egui_renderer: EguiRenderer,
+    
+    // compute shader用
+    compute_pipeline: wgpu::ComputePipeline,
+    pub sim_buffers: SimBuffers,
+    pub compute_bind_group_a: wgpu::BindGroup,
+    pub compute_bind_group_b: wgpu::BindGroup,
+    
+    // brush用
+    brush_buffer: wgpu::Buffer,
+    pub brush_data: BrushUniform,
 }
 
 impl State {
@@ -157,23 +184,170 @@ impl State {
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Instance Buffer"),
                 contents: bytemuck::cast_slice(&instances),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
             }
         );
-
-        // let mut current = board.empty_board();
-        // for i in 0..current.len() {
-        //     if rand::random_bool(0.25) {
-        //         current[i] = Cell::Alive;
-        //     }
-        // }
 
         let egui_renderer = EguiRenderer::new(
             &device,
             config.format,
             RendererOptions::default(),
         );
-        
+
+        // ----------------------------------------
+        // Compute Shaderのため
+        // ----------------------------------------
+        let initial_data = Board::empty_board(INITIAL_NUM_GRID_PER_ROW * INITIAL_NUM_GRID_PER_ROW);
+
+        let buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Boids Buffer A"),
+            contents: bytemuck::cast_slice(&initial_data),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::VERTEX
+                | wgpu::BufferUsages::COPY_DST,
+        });
+        let buffer_b = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Boids Buffer B"),
+            contents: bytemuck::cast_slice(&initial_data),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::VERTEX
+                | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let sim_buffers = SimBuffers {
+            buffer_a,
+            buffer_b,
+            frame_count: 0,
+        };
+
+        let brush_data = BrushUniform {
+            pos_x: 0.0,
+            pos_y: 0.0,
+            radius: 0.0,
+            strength: 0.0,
+            is_active: 0,
+            _pad: [0; 3],
+        };
+
+        let brush_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Brush Buffer"),
+            contents: bytemuck::cast_slice(&[brush_data]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let compute_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Compute Bind Group Layout"),
+                entries: &[
+                    // Binding 0: 読み取り専
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 1: 書き込み用
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 2: レンダリング用
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Binding 3: ブラシUniform
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let compute_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Compute Bind Group A"),
+            layout: &compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: sim_buffers.buffer_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: sim_buffers.buffer_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry { 
+                    binding: 2, 
+                    resource: instance_buffer.as_entire_binding() 
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: brush_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let compute_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Compute Bind Group B"),
+            layout: &compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: sim_buffers.buffer_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: sim_buffers.buffer_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry { 
+                    binding: 2, 
+                    resource: instance_buffer.as_entire_binding() 
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: brush_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let compute_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Compute Pipeline Layout"),
+                bind_group_layouts: &[Some(&compute_bind_group_layout)],
+                immediate_size: 0,
+            });
+
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Compute Pipeline"),
+            layout: Some(&compute_pipeline_layout),
+            module: &shader,
+            entry_point: Some("cs_main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
         Self {
             surface,
             device,
@@ -184,10 +358,13 @@ impl State {
             vertex_buffer,
             instance_buffer,
             num_instances,
-            // board,
-            // next: current.clone(),
-            // current,
             egui_renderer,
+            compute_pipeline,
+            sim_buffers,
+            compute_bind_group_a,
+            compute_bind_group_b,
+            brush_buffer,
+            brush_data,
         }
         // state.update_instances();
     }
@@ -331,6 +508,105 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+        }
+    }
+
+    pub fn update_compute(&mut self, num_instances: usize) {
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Compute Encoder"),
+        });
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Compute Pass"),
+                timestamp_writes: None,
+            });
+            compute_pass.set_pipeline(&self.compute_pipeline);
+            
+            // ダブルバッファリングのバインドグループ切り替え
+            let bind_group = if self.sim_buffers.frame_count % 2 == 0 {
+                &self.compute_bind_group_a
+            } else {
+                &self.compute_bind_group_b
+            };
+            compute_pass.set_bind_group(0, bind_group, &[]);
+            
+            // ワークグループの実行 (サイズ 64)
+            let workgroup_count = (num_instances + 63) / 64;
+            compute_pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
+        }
+        
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.sim_buffers.frame_count += 1;
+    }
+
+    // マウスクリック等でCPU側が更新されたとき、GPU側のバッファにデータを上書き同期する
+    pub fn upload_board(&mut self, squares: &[Square]) {
+        // 現在のアクティブな入力側バッファに書き込む
+        let active_buffer = if self.sim_buffers.frame_count % 2 == 0 {
+            &self.sim_buffers.buffer_a
+        } else {
+            &self.sim_buffers.buffer_b
+        };
+        
+        self.queue.write_buffer(
+            active_buffer,
+            0,
+            bytemuck::cast_slice(squares),
+        );
+    }
+
+    pub fn update_brush(&mut self, active: bool, gx: f32, gy: f32, radius: f32, strength: f32) {
+        self.brush_data.is_active = if active { 1 } else { 0 };
+        self.brush_data.pos_x = gx;
+        self.brush_data.pos_y = gy;
+        self.brush_data.radius = radius;
+        self.brush_data.strength = strength;
+
+        self.queue.write_buffer(
+            &self.brush_buffer,
+            0,
+            bytemuck::cast_slice(&[self.brush_data]),
+        );
+    }
+
+    pub fn download_board(&mut self, squares: &mut [Square]) {
+        let size = (squares.len() * std::mem::size_of::<Square>()) as wgpu::BufferAddress;
+        
+        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Staging Buffer for Download"),
+            size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Download Encoder"),
+        });
+
+        // 現在アクティブなシミュレーションバッファをコピー元にする
+        let active_buffer = if self.sim_buffers.frame_count % 2 == 0 {
+            &self.sim_buffers.buffer_a
+        } else {
+            &self.sim_buffers.buffer_b
+        };
+
+        encoder.copy_buffer_to_buffer(active_buffer, 0, &staging_buffer, 0, size);
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        let buffer_slice = staging_buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            sender.send(result).unwrap();
+        });
+
+        self.device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+
+        if let Ok(Ok(())) = receiver.recv() {
+            let data = buffer_slice.get_mapped_range();
+            let downloaded: &[Square] = bytemuck::cast_slice(&data);
+            squares.copy_from_slice(downloaded);
+            drop(data);
+            staging_buffer.unmap();
         }
     }
 }
