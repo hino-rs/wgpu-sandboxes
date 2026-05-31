@@ -285,17 +285,17 @@ impl State {
     pub fn update_instances(&mut self, squares: &[Square], num_grid_per_row: usize) {
         let mut instances = Vec::new();
         
-        let cell_pitch = 1.6 / (num_grid_per_row - 1) as f32;
+        let cell_pitch = 2.0 / (num_grid_per_row - 1) as f32;
         let cell_scale = cell_pitch;
         
         for y in 0..num_grid_per_row {
             for x in 0..num_grid_per_row {
-                let x_pos = (x as f32) * cell_pitch - 0.8;
-                let y_pos = (y as f32) * cell_pitch - 0.8;
+                let x_pos = (x as f32) * cell_pitch - 1.0;
+                let y_pos = (y as f32) * cell_pitch - 1.0;
 
                 let square = squares[y * num_grid_per_row + x];
                 
-                let color = if square.puddle <= 0.0 {
+                let color = if square.puddle <= 0.005 {
                     TERRAIN_COLOR
                 } else {
                     let water_color = crate::utils::Math::mix(WATER_SHALLOW, WATER_DEEP, square.puddle);
