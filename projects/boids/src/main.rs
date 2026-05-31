@@ -32,7 +32,7 @@ pub fn run() {
     wasm_bindgen_futures::spawn_local(async move {
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes().with_title("wgpu Elementary cellular automaton"))
+                .create_window(Window::default_attributes().with_title("wgp Boids simlator"))
                 .unwrap(),
         );
 
