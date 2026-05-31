@@ -5,7 +5,7 @@ use egui_winit::State as EguiState;
 use web_time::Instant;
 use winit::{application::ApplicationHandler, dpi::PhysicalPosition, event::WindowEvent, window::Window};
 
-use crate::{gpu::State, object::{Board, INITIAL_NUM_GRID_PER_ROW}};
+use crate::{config::{Configs, Processor}, gpu::State, object::{Board, INITIAL_NUM_GRID_PER_ROW}};
 
 #[derive(Default)]
 pub struct App {
@@ -18,6 +18,8 @@ pub struct App {
     last_update_time: Option<Instant>,
     cursor_pos: Option<winit::dpi::PhysicalPosition<f64>>,
     mouse_pressed: bool,
+    configs: Option<Configs>,
+    last_processor: Option<Processor>,
 }
 
 impl ApplicationHandler for App {
@@ -49,6 +51,11 @@ impl ApplicationHandler for App {
         self.egui_state = Some(egui_state);
         self.current_tab = ConfigTab::default();
         self.last_update_time = Some(Instant::now());
+        self.configs = Some(Configs::default());
+        self.last_processor = Some(Processor::CPU);
+
+        let board = self.board.as_ref().unwrap();
+        self.state.as_mut().unwrap().upload_board(&board.current_squares);
     }
 
     fn window_event(
@@ -88,18 +95,39 @@ impl ApplicationHandler for App {
                     Some(window),
                     Some(egui_state),
                     Some(last_update),
+                    Some(configs)
                 ) = (
                     &mut self.state,
                     &mut self.board,
                     &mut self.window,
                     &mut self.egui_state,
                     &mut self.last_update_time,
+                    &mut self.configs,
                 ) {
                     let now = Instant::now();
                     let elapsed = now.duration_since(*last_update);
+
+                    // プロセッサ切り替えの検知と同期
+                    if Some(configs.sys.processor) != self.last_processor {
+                        match configs.sys.processor {
+                            Processor::CPU => {
+                                // GPUからCPUへ：シミュレーション結果をダウンロード
+                                state.download_board(&mut board.current_squares);
+                            }
+                            Processor::GPU => {
+                                // CPUからGPUへ：シミュレーション開始のためにアップロード
+                                state.upload_board(&board.current_squares);
+                            }
+                        }
+                        self.last_processor = Some(configs.sys.processor);
+                    }
+
                     if !board.pause {
                         if elapsed.as_millis() >= board.delay as u128 {
-                            board.update();
+                            match configs.sys.processor {
+                                Processor::CPU => board.update(),
+                                Processor::GPU => state.update_compute(board.current_squares.len()),
+                            }
                             *last_update = now;
                         }
                     } else {
@@ -114,31 +142,25 @@ impl ApplicationHandler for App {
                             let size = window.inner_size();
                             let width = size.width as f64;
                             let height = size.height as f64;
-
-                            // 座標をwgpuで扱いやすいように変換
                             let nx = (pos.x / width) * 2.0 - 1.0;
                             let ny = 1.0 - (pos.y / height) * 2.0;
-
-                            // グリッド座標に変換
                             let cell_pitch = 2.0 / (board.num_grid_per_row - 1) as f64;
                             let gx = ((nx + 1.0) / cell_pitch).round() as isize;
                             let gy = ((ny + 1.0) / cell_pitch).round() as isize;
 
-                            // 円形ブラシで水を付与する
-                            let brush_radius = 4;
+                            let brush_radius = configs.sim.brush_radius;
+                            
                             for dy in -brush_radius..=brush_radius {
                                 for dx in -brush_radius..=brush_radius {
                                     // 円の内側かチェック
                                     if dx * dx + dy * dy <= brush_radius * brush_radius {
                                         let tx = gx + dx;
                                         let ty = gy + dy;
-
                                         // グリッドの範囲内かチェック
                                         if tx >= 0 && tx < board.num_grid_per_row as isize
                                             && ty >= 0 && ty < board.num_grid_per_row as isize 
                                         {
                                             let idx = ty as usize * board.num_grid_per_row + tx as usize;
-                                            
                                             // puddleに水を加える
                                             board.current_squares[idx].puddle = f32::min(
                                                 1.0, 
@@ -148,6 +170,31 @@ impl ApplicationHandler for App {
                                     }
                                 }
                             }
+                            
+                            // 送信
+                            match configs.sys.processor {
+                                Processor::CPU => {
+                                    // CPUモード：更新されたデータをインスタンスバッファへ転送
+                                    state.update_instances(
+                                        &board.current_squares,
+                                        board.num_grid_per_row,
+                                    );
+                                }
+                                Processor::GPU => {
+                                    // GPUモード：ブラシの uniform 情報を更新
+                                    state.update_brush(
+                                        true,
+                                        gx as f32,
+                                        gy as f32,
+                                        brush_radius as f32,
+                                        0.2,
+                                    );
+                                }
+                            }
+                        }
+                    } else {
+                        if configs.sys.processor == Processor::GPU {
+                            state.update_brush(false, 0.0, 0.0, 0.0, 0.0);
                         }
                     }
 
@@ -157,6 +204,12 @@ impl ApplicationHandler for App {
 
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
                         ui.heading("Fake Water Control Panel");
+
+                        ui.label("Processor");
+                        ui.horizontal(|ui| {
+                            ui.selectable_value(&mut configs.sys.processor, crate::config::Processor::CPU, "CPU");
+                            ui.selectable_value(&mut configs.sys.processor, crate::config::Processor::GPU, "GPU");
+                        });
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
@@ -184,10 +237,12 @@ impl ApplicationHandler for App {
                         pixels_per_point: egui_output.pixels_per_point,
                     };
 
-                    state.update_instances(
-                        &board.current_squares,
-                        board.num_grid_per_row,
-                    );
+                    if configs.sys.processor == Processor::CPU {
+                        state.update_instances(
+                            &board.current_squares,
+                            board.num_grid_per_row,
+                        );
+                    }
                     state.render(&paint_jobs, &screen_descripter, board.bg_color);
                 }
 
@@ -253,6 +308,8 @@ impl App {
             last_update_time: Some(Instant::now()),
             cursor_pos: Some(PhysicalPosition::default()),
             mouse_pressed: false,
+            configs: Some(Configs::default()),
+            last_processor: Some(Processor::CPU),
         }
     }
 }
