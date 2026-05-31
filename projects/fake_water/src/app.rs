@@ -30,7 +30,7 @@ impl ApplicationHandler for App {
 
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes().with_title("LifeGame"))
+                .create_window(Window::default_attributes().with_title("Fake Water"))
                 .unwrap(),
         );
 
