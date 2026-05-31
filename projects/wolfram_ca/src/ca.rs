@@ -56,7 +56,7 @@ impl Ca {
                 };
             }
 
-            let bit = left * 3 + center * 2 + right * 1;
+            let bit = left * 4 + center * 2 + right * 1;
             let next = (self.rule >> bit) & 1;
 
             next_bits.push(next);
