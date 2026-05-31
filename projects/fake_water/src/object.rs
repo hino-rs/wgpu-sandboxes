@@ -67,6 +67,11 @@ impl Board {
         let absorption = 0.01;   // 自身が最底値のときの蒸発率
 
         for i in 0..self.current_squares.len() {
+            let mut current_cell = self.current_squares[i];
+            current_cell.puddle *= 0.999;
+
+            self.next_squares[i].puddle = current_cell.puddle;
+
             let (x, y) = (i % self.num_grid_per_row, i / self.num_grid_per_row);
 
             let mut lowest_x = x;
