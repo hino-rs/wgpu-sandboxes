@@ -5,6 +5,8 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::event::{ElementState, WindowEvent};
 use winit::dpi::PhysicalSize;
 
+use crate::shape::Ball;
+
 // 頂点データの中身 (4点分 反時計周り)
 const VERTICES: &[Vertex] = &[
     Vertex {
@@ -64,7 +66,8 @@ impl Vertex {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniform {
-    position: [f32; 4],
+    positions: [[f32; 4]; 30],
+    colors: [[f32; 4]; 30],
 }
 
 // GPU描画に必要な状態をまとめた構造体
@@ -91,12 +94,8 @@ pub struct State {
     uniform_buffer: wgpu::Buffer,
     // このバッファのシェーダーを`@group(0) @binding(0)`に紐付けるためのバインドグループを格納する
     bind_group: wgpu::BindGroup,
-    // 経過時間を保持する
-    time: f32,
-    // オブジェクトの位置
-    pos: glam::Vec2,
-    // オブジェクトの速度
-    vel: glam::Vec2,
+    // オブジェクト
+    balls: Vec<Ball>,
     // アスペクト比
     aspect: f32,
 }
@@ -157,7 +156,8 @@ impl State {
         });
 
         let uniform_data = Uniform {
-            position: [0.0, 0.0, 0.0, 0.0],
+            positions: [[0.0; 4]; 30],
+            colors: [[1.0; 4]; 30],
         };
         
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -305,6 +305,27 @@ impl State {
         });
         let num_indices = INDICES.len() as u32;
 
+        let mut balls = Vec::new();
+        for i in 0..30 {
+            let f = i as f32;
+            let pos = glam::Vec2::new(
+                (f * 0.17).sin() * 0.5,
+                (f * 0.23).cos() * 0.5,
+            );
+
+            let vel = glam::Vec2::new(
+                (f * 0.11).cos() * 0.005 + 0.002,
+                (f * 0.13).sin() * 0.005 + 0.002,
+            );
+
+            let color = [
+                (f * 0.31).sin().abs() * 0.7 + 0.3,
+                (f * 0.37).cos().abs() * 0.7 + 0.3,
+                (f * 0.43).sin().abs() * 0.7 + 0.3,
+            ];
+            balls.push(Ball { pos, vel, color });
+        }
+
         Self {
             surface,
             device,
@@ -317,72 +338,97 @@ impl State {
             num_indices,
             uniform_buffer,
             bind_group,
-            time: 0.0,
-            pos: glam::Vec2::ZERO,
-            vel: glam::Vec2::new(0.008, 0.006),
+            balls,
             aspect,
         }
     }
 
     pub fn update(&mut self) {
-        self.vel.y -= 0.0003;
-        self.vel.x *= 0.999;
-
-        // 1. 位置を速度分だけ進める
-        self.pos += self.vel;
-        // 半径 (中心から端までの距離)
         let radius = 0.1;
-        // 2. 左右の壁との衝突判定
-        if self.pos.x > (self.aspect - radius) {
-            self.pos.x = self.aspect - radius; // めり込み補正
-            self.vel.x = -self.vel.x * 0.9;   // X方向の速度を反転！
-        } else if self.pos.x < (-self.aspect + radius) {
-            self.pos.x = -self.aspect + radius; // めり込み補正
-            self.vel.x = -self.vel.x * 0.9;   // X方向の速度を反転！
+        // 全てのボールの物理演算をループで更新！
+        for ball in &mut self.balls {
+            ball.vel.y -= 0.0003;
+            ball.vel.x *= 0.999;
+            ball.pos += ball.vel;
+            // 左右の壁の判定
+            if ball.pos.x > (self.aspect - radius) {
+                ball.pos.x = self.aspect - radius;
+                ball.vel.x = -ball.vel.x * 0.9;
+            } else if ball.pos.x < (-self.aspect + radius) {
+                ball.pos.x = -self.aspect + radius;
+                ball.vel.x = -ball.vel.x * 0.9;
+            }
+            // 上下の壁の判定
+            if ball.pos.y > (1.0 - radius) {
+                ball.pos.y = 1.0 - radius;
+                ball.vel.y = -ball.vel.y * 0.8;
+                ball.vel.x *= 0.95;
+            } else if ball.pos.y < (-1.0 + radius) {
+                ball.pos.y = -1.0 + radius;
+                ball.vel.y = -ball.vel.y * 0.8;
+                ball.vel.x *= 0.95;
+            }
         }
-        // 3. 上下の壁との衝突判定
-        if self.pos.y > (1.0 - radius) {
-            self.pos.y = 1.0 - radius; // めり込み補正
-            self.vel.y = -self.vel.y * 0.8;   // Y方向の速度を反転！
-            self.vel.x *= 0.95;
-        } else if self.pos.y < (-1.0 + radius) {
-            self.pos.y = -1.0 + radius; // めり込み補正
-            self.vel.y = -self.vel.y * 0.8;   // Y方向の速度を反転！
-            self.vel.x *= 0.95;
-        }
-        // 4. GPUに送るデータを作成
-        let uniform_data = Uniform {
-            position: [self.pos.x, self.pos.y, self.aspect, 0.0],
-        };
 
-        // queue.write_bufferでGPUにデータを転送
-        self.queue.write_buffer(
-            &self.uniform_buffer, 
-            0, 
-            bytemuck::bytes_of(&uniform_data),
-        );
+        let num_balls = self.balls.len();
+        for i in 0..num_balls {
+            for j in (i + 1)..num_balls {
+                let (left, right) = self.balls.split_at_mut(j);
+                let ball_i = &mut left[i];
+                let ball_j = &mut right[0];
+
+                let delta = ball_j.pos - ball_i.pos;
+                let dist = delta.length();
+                let min_dist = radius * 2.0;
+
+                if dist < min_dist {
+                    let normal = delta / dist;
+                    let overlap = min_dist - dist;
+
+                    ball_i.pos -= normal * (overlap * 0.5);
+                    ball_j.pos += normal * (overlap * 0.5);
+
+                    let rv = ball_j.vel - ball_i.vel; // 相対速度
+                    let vel_along_normal = rv.dot(normal);
+
+                    if vel_along_normal < 0.0 {
+                        let restitution = 0.8; // ボールどうしの反発係数
+                        let impulse_scalar = -(1.0 + restitution) * vel_along_normal / 2.0;
+                        let impulse = normal * impulse_scalar;
+
+                        // 速度を適用
+                        ball_i.vel -= impulse;
+                        ball_j.vel += impulse;
+                    }
+                }
+            }
+        }
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            // キーボード入力イベントを検知
             WindowEvent::KeyboardInput { event: key_event, .. } => {
-                // キーが押された瞬間 (Pressed) だけ判定する
                 if key_event.state == ElementState::Pressed {
                     match key_event.physical_key {
-                        // スペースキーで上にジャンプ！
                         PhysicalKey::Code(KeyCode::Space) => {
-                            self.vel.y = 0.012; // 上方向の初速を与える
-                            return true; // イベントを消費したことを伝える
-                        }
-                        // 左矢印キーで左へ加速！
-                        PhysicalKey::Code(KeyCode::ArrowLeft) => {
-                            self.vel.x -= 0.005;
+                            // 全てのボールを一斉にジャンプ！
+                            for ball in &mut self.balls {
+                                ball.vel.y = 0.012;
+                            }
                             return true;
                         }
-                        // 右矢印キーで右へ加速！
+                        PhysicalKey::Code(KeyCode::ArrowLeft) => {
+                            // 全てのボールに左風を送る
+                            for ball in &mut self.balls {
+                                ball.vel.x -= 0.005;
+                            }
+                            return true;
+                        }
                         PhysicalKey::Code(KeyCode::ArrowRight) => {
-                            self.vel.x += 0.005;
+                            // 全てのボールに右風を送る
+                            for ball in &mut self.balls {
+                                ball.vel.x += 0.005;
+                            }
                             return true;
                         }
                         _ => {}
@@ -461,18 +507,28 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            
+            let mut positions = [[0.0f32; 4]; 30];
+            let mut colors = [[0.0f32; 4]; 30];
+            
+            for (i, ball) in self.balls.iter().enumerate() {
+                positions[i] = [ball.pos.x, ball.pos.y, self.aspect, 0.0];
+                colors[i] = [ball.color[0], ball.color[1], ball.color[2], 1.0];
+            }
 
-            // グループ0にバインドグループをセット
+            let uniform_data = Uniform { positions, colors };
+            // GPUへ一括転送 (ループの外で1回だけ呼ぶ)
+            self.queue.write_buffer(
+                &self.uniform_buffer,
+                0,
+                bytemuck::bytes_of(&uniform_data),
+            );
+            // バインドグループとバッファをセット
             render_pass.set_bind_group(0, &self.bind_group, &[]);
-
-            // 頂点バッファをスロット0に割り当てる
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-
-            // インデックスバッファをセットする
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-            // インデックスを使って描画
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            // 描画 (最後の引数を 0..1 から 0..30 に変更し、30個分一気に描画させる！)
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..30);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
