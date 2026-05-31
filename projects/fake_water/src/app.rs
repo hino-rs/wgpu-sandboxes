@@ -120,9 +120,9 @@ impl ApplicationHandler for App {
                             let ny = 1.0 - (pos.y / height) * 2.0;
 
                             // グリッド座標に変換
-                            let cell_pitch = 1.6 / (board.num_grid_per_row - 1) as f64;
-                            let gx = ((nx + 0.8) / cell_pitch).round() as isize;
-                            let gy = ((ny + 0.8) / cell_pitch).round() as isize;
+                            let cell_pitch = 2.0 / (board.num_grid_per_row - 1) as f64;
+                            let gx = ((nx + 1.0) / cell_pitch).round() as isize;
+                            let gy = ((ny + 1.0) / cell_pitch).round() as isize;
 
                             // 円形ブラシで水を付与する
                             let brush_radius = 4;
