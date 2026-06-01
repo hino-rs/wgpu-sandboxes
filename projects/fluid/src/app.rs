@@ -143,11 +143,13 @@ impl ApplicationHandler for App {
                         ui.checkbox(&mut boids.trails, "Enable Trails");
 
                         ui.separator();
-                        ui.label("Fluid Physics Parameters");
-
                         ui.add(
-                            egui::Slider::new(&mut boids.params.visual_range, 0.0001..=10.00)
+                            egui::Slider::new(&mut boids.params.visual_range, 0.01..=0.30)
                                 .text("Kernel Radius (h)"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut boids.params.protected_range, 0.0..=2.0)
+                                .text("Look-Ahead Prediction"),
                         );
                         ui.add(
                             egui::Slider::new(&mut boids.params.separation_weight, 0.0001..=10.000)
