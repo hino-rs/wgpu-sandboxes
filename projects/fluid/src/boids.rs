@@ -20,13 +20,13 @@ pub struct BoidsParams {
 impl Default for BoidsParams {
     fn default() -> Self {
         Self {
-            visual_range: 0.08,        // 流体のカーネル半径 h (小さくしてシャープな動きにする)
-            protected_range: 0.0,       // 未使用
-            separation_weight: 3.0,     // 圧力(反発)の強さ k
-            alignment_weight: 1.5,      // 粘性(ねっとり感)の強さ
-            cohesion_weight: 3.0,       // 基準密度のスケール値 (3.0 * 5.0 = 15.0)
-            max_speed: 0.02,            // 安定した水たまりを作るための最高速度制限 (壁抜け防止)
-            min_speed: 0.0,             // 水が静止できるように最低速度は 0.0
+            visual_range: 0.15,        // H: 影響半径の初期値 (0.15)
+            protected_range: 0.8,       // LOOK_AHEAD: 未来予測係数の初期値 (0.8)
+            separation_weight: 3.0,     // PRESSURE_COEF & NEAR_PRESSURE_COEF のベース (3.0 * 0.0333 = 0.10)
+            alignment_weight: 1.5,      // VISCOSITY_COEF のベース (1.5 * 0.0667 = 0.10)
+            cohesion_weight: 3.0,       // TARGET_DENSITY のベース (3.0 * 5.0 = 15.0)
+            max_speed: 0.02,            // 最高速度制限
+            min_speed: 0.0,             // 最低速度
             _padding: 0.0,
         }
     }

@@ -1,5 +1,13 @@
 const PI: f32 = 3.14159265358979323846264338327950288;
 
+const DAMPING_AIR: f32 = 0.98;           // 空気抵抗：毎フレーム失われる速度の割合。これがないとエネルギーが溜まり続けて爆発します。
+const TIME_STEP: f32 = 0.6;              // タイムステップ：1コマごとの時間の進み幅。
+
+
+const GRAVITY: vec2f = vec2f(0.0, -0.0012); // 重力：下方向への自然な落下の強さ。
+const WALL_BOUNDS: f32 = 0.95;           // 壁の境界：-1.0〜1.0 の正方形の箱の内側を指定。
+const WALL_DAMPING: f32 = 0.4;          // 壁の反発係数：壁にぶつかった時にどれだけ勢いが吸収されるか（0.0〜1.0）。
+
 // =========================================================================
 // 🌊 Boids / 粒子システム 共通データ構造 (Render Pipeline / Compute Pipeline)
 // =========================================================================
@@ -152,120 +160,131 @@ fn cs_main(
     @builtin(global_invocation_id) global_id: vec3<u32>
 ) {
     let index = global_id.x;
-    // let num_particles = arrayLength(&boids_src) / 16u;
     let num_particles = arrayLength(&boids_src);
 
-    if (index >= num_particles) {
-        return;
-    }
+    if (index >= num_particles) { return; }
+
+    let H = params.visual_range;
+    let LOOK_AHEAD = params.protected_range;
+    let TARGET_DENSITY = params.cohesion_weight * 5.0;
+    let PRESSURE_COEF = params.separation_weight * 0.0333;
+    let NEAR_PRESSURE_COEF = params.separation_weight * 0.0333;
+    let VISCOSITY_COEF = params.alignment_weight * 0.0667;
 
     var boid = boids_src[index];
 
-    // // 1. トレイル用の過去の残像シフト処理（これはそのまま残します）
-    // for (var g = 15u; g > 0u; g = g - 1u) {
-    //     boids_dst[index + num_particles * g] = boids_src[index + num_particles * (g - 1u)];
-    // }
-
-    // パラメータの設定
-    let h = params.visual_range; // 検出視野を「カーネル半径 h」として代用します
+    // ---------------------------------------------------------------------
+    // 位置予測 (Look-ahead)
+    // ---------------------------------------------------------------------
+    // 現在の速度から「一コマ未来の位置」を予測し、その場所を基準に物理計算を行います。
+    let my_pred_pos = boid.position + boid.velocity * LOOK_AHEAD;
 
     // ==========================================
-    // STEP 1: 周囲の「密度（Density）」の計算
+    // 予測位置をもとに「密度」と「近接密度」を計算
     // ==========================================
     var density = 0.0;
+    var near_density = 0.0;
+
     for (var i = 0u; i < num_particles; i++) {
         let other = boids_src[i];
-        let dst = distance(boid.position, other.position);
+        // 相手の未来の予測位置
+        let other_pred_pos = other.position + other.velocity * LOOK_AHEAD;
         
-        // 距離が h 未満の粒子から受ける「重み」を合計する
-        density += smoothing_kernel(dst, h);
+        let dst = distance(my_pred_pos, other_pred_pos);
+
+        if (dst < H) {
+            // 通常の密度（体積維持用）
+            density += smoothing_kernel(dst, H);
+            // 近接密度（ダマ防止用・本来はSpikyベースですが現状の関数で代用して蓄積）
+            near_density += smoothing_kernel(dst, H);
+        }
     }
 
+    // ---------------------------------------------------------------------
+    // 状態方程式から「2つの圧力」を計算
+    // ---------------------------------------------------------------------
+    // 目標密度を超えた分の通常圧力
+    let my_pressure = max((density - TARGET_DENSITY) * PRESSURE_COEF, 0.0);
+    // 超至近距離用の近接圧力（これは常に反発力として働く）
+    let my_near_pressure = near_density * NEAR_PRESSURE_COEF;
+
     // ==========================================
-    // STEP 2: 圧力（反発力）と粘性（摩擦）の計算
+    // 圧力勾配（反発力）と粘性（摩擦）の計算
     // ==========================================
     var pressure_force = vec2f(0.0, 0.0);
     var viscosity_force = vec2f(0.0, 0.0);
-
-    // 調整用の物理パラメータを UI (params) からリアルタイム同期
-    // let target_density = params.cohesion_weight * 5.0; // 基準密度 (UIで 1.0~8.0 -> 密度 5.0~40.0)
-    // let pressure_coef = params.separation_weight * 0.005; // 圧力反発の強さ
-    // let viscosity_coef = params.alignment_weight * 0.01;  // 粘性(ねっとり感)の摩擦強度
-    let target_density = params.cohesion_weight; // 基準密度 (UIで 1.0~8.0 -> 密度 5.0~40.0)
-    let pressure_coef = params.separation_weight; // 圧力反発の強さ
-    let viscosity_coef = params.alignment_weight;  // 粘性(ねっとり感)の摩擦強度
 
     for (var i = 0u; i < num_particles; i++) {
         if (i == index) { continue; } // 自分自身は除外
         
         let other = boids_src[i];
-        let dir = other.position - boid.position;
+        let other_pred_pos = other.position + other.velocity * LOOK_AHEAD;
+        
+        let dir = other_pred_pos - my_pred_pos;
         let dst = length(dir);
 
-        if (dst > 0.0 && dst < h) {
+        if (dst > 0.0 && dst < H) {
             let dir_normalized = dir / dst;
 
-            // ① 圧力勾配：自分がギュウギュウなほど、相手から強く遠ざかる方向の力を受ける
-            // let slope = smoothing_kernel_derivative(dst, h);
-            let slope = spiky_kernel_derivative(dst, h);
+            // 各種カーネル関数の傾き（導関数）を取得
+            let slope = abs(smoothing_kernel_derivative(dst, H));
+            let near_slope = abs(spiky_kernel_derivative(dst, H));
 
-            // 密度が target_density を超えた分の圧力
-            let my_pressure = max((density - target_density) * pressure_coef, 0.0);
+            // ---------------------------------------------------------------------
+            // 密度による割り算（圧力を加速度へ変換）
+            // ---------------------------------------------------------------------
+            // 1パス処理のため、自分の圧力情報と傾きを合成し、自分の密度（density）で割ることで
+            // 「ギューギューに詰まっている場所ほど、力に対して動きにくくなる」物理特性を再現する。
+            let force_magnitude = (my_pressure * slope + my_near_pressure * near_slope) / density;
             
-            // 圧力を下げる（相手から離れる）方向に力を加える
-            pressure_force += -dir_normalized * slope * my_pressure;
+            // 圧力を下げる（相手から離れる）方向に力を加える（-dir_normalized）
+            pressure_force += -dir_normalized * force_magnitude;
 
-            // ② 粘性力：周りの水粒子の速度の平均に合わせようとするねっとりした力
-            let weight = smoothing_kernel(dst, h);
-            viscosity_force += (other.velocity - boid.velocity) * weight * viscosity_coef;
+            // 粘性力（周りの流体と速度を同期させて滑らかにする）
+            let weight = smoothing_kernel(dst, H);
+            viscosity_force += (other.velocity - boid.velocity) * weight * VISCOSITY_COEF;
         }
     }
 
     // ==========================================
-    // STEP 3: 力の合成 と 外力（重力）の適用
+    // 力の合成と速度の更新
     // ==========================================
-    // 下に向かう重力（適度な強さに調整）
-    let gravity = vec2f(0.0, -0.0003);
+    // すべての力（通常圧力 + 近接圧力 + 粘性 + 重力）を現在の速度に加算
+    boid.velocity += pressure_force + viscosity_force + GRAVITY;
 
-    // すべての力を速度に加算する
-    boid.velocity += pressure_force + viscosity_force + gravity;
+    // 空気抵抗によるエネルギーの自然減衰
+    boid.velocity *= DAMPING_AIR;
 
-    boid.velocity *= 0.98;
-
-    // --- 速度の安全制限（クランプ） ---
-    let max_speed = params.max_speed;
+    // 速度が無限に加速して破綻するのを防ぐ安全弁
+    let max_s = params.max_speed;
     let speed = length(boid.velocity);
-    if (speed > max_speed) {
-        boid.velocity = (boid.velocity / speed) * max_speed;
+    if (speed > max_s) {
+        boid.velocity = (boid.velocity / speed) * max_s;
     }
 
     // ==========================================
-    // STEP 4: 位置の更新 と 壁での跳ね返り判定
+    // 位置の更新と壁での跳ね返り判定
     // ==========================================
-    boid.position += boid.velocity * 0.7; // タイムステップを小さめにする
+    boid.position += boid.velocity * TIME_STEP;
 
-    // 箱の境界を設定 (2Dの -1.0 〜 1.0 の正方形の箱)
-    let bounds = 0.95;       // 少し内側を壁にします
-    let damping = 0.5;       // 跳ね返り時に吸収されるエネルギー（0.0〜1.0）
-
-    // 左右の壁での反発
-    if (boid.position.x > bounds) {
-        boid.position.x = bounds;
-        boid.velocity.x *= -damping;
-    } else if (boid.position.x < -bounds) {
-        boid.position.x = -bounds;
-        boid.velocity.x *= -damping;
+    // --- 左右の壁での反発 ---
+    if (boid.position.x > WALL_BOUNDS) {
+        boid.position.x = WALL_BOUNDS;
+        boid.velocity.x *= -WALL_DAMPING;
+    } else if (boid.position.x < -WALL_BOUNDS) {
+        boid.position.x = -WALL_BOUNDS;
+        boid.velocity.x *= -WALL_DAMPING;
     }
 
-    // 上下の壁での反発
-    if (boid.position.y > bounds) {
-        boid.position.y = bounds;
-        boid.velocity.y *= -damping;
-    } else if (boid.position.y < -bounds) {
-        boid.position.y = -bounds;
-        boid.velocity.y *= -damping;
+    // --- 上下の壁での反発 ---
+    if (boid.position.y > WALL_BOUNDS) {
+        boid.position.y = WALL_BOUNDS;
+        boid.velocity.y *= -WALL_DAMPING;
+    } else if (boid.position.y < -WALL_BOUNDS) {
+        boid.position.y = -WALL_BOUNDS;
+        boid.velocity.y *= -WALL_DAMPING;
     }
 
-    // 最終的な結果を出力先バッファへ保存
+    // 計算結果を出力先バッファへ保存
     boids_dst[index] = boid;
 }
