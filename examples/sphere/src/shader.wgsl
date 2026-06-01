@@ -7,13 +7,15 @@ struct CameraUniform {
 struct VertexInput {
     @location(0) position: vec3f,
     @location(1) normal: vec3f,
-    @location(2) tex_coords: vec2f
+    @location(2) tex_coords: vec2f,
+    @location(3) color: vec3f,
 }
 
 struct VertexOutput {
     @builtin(position) position: vec4f,
     // 影を付けるために法線を送るようにする
     @location(0) normal: vec3f,
+    @location(1) color: vec3f,
 }
 
 @vertex
@@ -26,13 +28,16 @@ fn vs_main(model: VertexInput) -> VertexOutput {
     // 法線をそのまま次のピクセルシェーダーへ渡す
     out.normal = model.normal;
 
+    // 色自体はそのまま渡す
+    out.color = model.color;
+
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // 球体のベースの色
-    let object_color = vec3f(0.2, 0.6, 1.0);
+    let object_color = in.color;
 
     // 空間全体のうっすらとした環境光
     let ambient_strength = 0.1;

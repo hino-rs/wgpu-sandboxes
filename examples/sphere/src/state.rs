@@ -45,6 +45,7 @@ pub struct Vertex {
     position: [f32; 3],   // 位置 (x, y, z)
     normal: [f32; 3],     // 法線 (nx, ny, nz)
     tex_coords: [f32; 2], // テクスチャ座標 (u, v)
+    color: [f32; 3],      // 色 (R, G, B)
 }
 
 impl Vertex {
@@ -55,6 +56,7 @@ impl Vertex {
             0 => Float32x3,
             1 => Float32x3,
             2 => Float32x2,
+            3 => Float32x3,
         ];
 
         wgpu::VertexBufferLayout {
@@ -85,6 +87,7 @@ fn generate_uv_sphere(radius: f32, lat_segments: u32, lon_segments: u32) -> (Vec
                 position: [x, y, z],
                 normal: [x/r, y/r, z/r],
                 tex_coords: [lon as f32 / lon_segments as f32, lat as f32 / lat_segments as f32],
+                color: [0.2, 0.6, 1.0],
             };
 
             vertices.push(vertex);
@@ -121,14 +124,21 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
+
+    // 球体
     index_buffer: wgpu::Buffer,
     num_indices: u32,
 
+    // カメラ
     camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+
+    // 床
+    floor_vertex_buffer: wgpu::Buffer,
+    floor_index_buffer: wgpu::Buffer,
+    num_floor_indices: u32,
 }
 
 impl State {
@@ -188,11 +198,11 @@ impl State {
 
         
         let camera = Camera {
-            eye: (0.0, 0.0, 3.0).into(), // glam::Vec3に変換
+            eye: (0.0, 1.5, 3.0).into(), // glam::Vec3に変換
             target: (0.0, 0.0, 0.0).into(),
             up: glam::Vec3::Y,
             aspect: config.width as f32 / config.height as f32,
-            fovy: 45.0f32.to_radians(),
+            fovy: 90.0f32.to_radians(),
             znear: 0.1,
             zfar: 100.0,
         };
@@ -229,6 +239,35 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
+        // 床
+        let floor_vertices = vec![
+            // 位置 (x, y, z), 法線 (nx, ny, nz), UV (u, v)
+            Vertex { position: [-10.0, -1.0, -10.0], normal: [0.0, 1.0, 0.0], tex_coords: [0.0, 0.0], color: [1.0, 1.0, 1.0] }, // 左奥
+            Vertex { position: [ 10.0, -1.0, -10.0], normal: [0.0, 1.0, 0.0], tex_coords: [1.0, 0.0], color: [1.0, 1.0, 1.0] }, // 右奥
+            Vertex { position: [ 10.0, -1.0,  10.0], normal: [0.0, 1.0, 0.0], tex_coords: [1.0, 1.0], color: [1.0, 1.0, 1.0] }, // 右手前
+            Vertex { position: [-10.0, -1.0,  10.0], normal: [0.0, 1.0, 0.0], tex_coords: [0.0, 1.0], color: [1.0, 1.0, 1.0] }, // 左手前
+        ];
+
+        let floor_indices: Vec<u16> = vec![
+            0, 3, 2, // 三角形1
+            0, 2, 1, // 三角形2
+        ];
+
+        let floor_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Floor Vertex Buffer"),
+            contents: bytemuck::cast_slice(&floor_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        
+        let floor_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Floor Indices Buffer"),
+            contents: bytemuck::cast_slice(&floor_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let num_floor_indices = floor_indices.len() as u32;
+
+        // レンダーパイプライン
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
@@ -303,7 +342,6 @@ impl State {
             config,
             render_pipeline,
             vertex_buffer,
-            num_vertices,
             index_buffer,
             num_indices,
 
@@ -311,6 +349,10 @@ impl State {
             camera_uniform,
             camera_bind_group,
             camera_buffer,
+
+            floor_index_buffer,
+            floor_vertex_buffer,
+            num_floor_indices,
         }
     }
 
@@ -372,10 +414,14 @@ impl State {
             // カメラ
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
+            // 床
+            render_pass.set_vertex_buffer(0, self.floor_vertex_buffer.slice(..));
+            render_pass.set_index_buffer(self.floor_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_floor_indices, 0, 0..1);
+
+            // 球体
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
