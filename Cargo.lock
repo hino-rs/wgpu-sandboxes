@@ -2680,6 +2680,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sphere"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "egui",
+ "egui-wgpu",
+ "egui_plot",
+ "env_logger",
+ "glam",
+ "log",
+ "pollster",
+ "rand",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "spirv"
 version = "0.4.0+sdk-1.4.341.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
