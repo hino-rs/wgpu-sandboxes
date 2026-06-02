@@ -1,7 +1,7 @@
 const PI: f32 = 3.14159265358979323846264338327950288;
 
 const DAMPING_AIR: f32 = 0.98;           // 空気抵抗：毎フレーム失われる速度の割合。これがないとエネルギーが溜まり続けて爆発します。
-const TIME_STEP: f32 = 0.6;              // タイムステップ：1コマごとの時間の進み幅。
+const TIME_STEP: f32 = 0.1;              // タイムステップ：1コマごとの時間の進み幅。
 
 
 const GRAVITY: vec2f = vec2f(0.0, -0.0012); // 重力：下方向への自然な落下の強さ。
@@ -18,7 +18,7 @@ struct RenderParams {
     num_boids: u32,      // シミュレーション内の総粒子（ボイド）数
     aspect_ratio: f32,   // 画面のアスペクト比 (幅 / 高さ) - 歪みを防ぐための補正用
     use_trails: u32,     // 残像（トレイル）を描画するかどうかのフラグ (0u: オフ, 1u: オン)
-    _p: u32              // メモリアライメント（アライメントサイズを16バイトの倍数にするためのダミー）
+    glow_width: f32,
 }
 
 // グループ0のバインディング0に Uniform バッファとして登録
@@ -41,7 +41,8 @@ struct BoidInput {
 // --- 頂点シェーダーからピクセルシェーダーへの受け渡しデータ ---
 struct VertexOutput {
     @builtin(position) clip_position: vec4f, // クリップ空間における最終的な頂点位置 (GPU用)
-    @location(0) color: vec4f,               // 各頂点に補間されるカラー値 (ピクセルシェーダーへ送る)
+    @location(0) color: vec3f,               // 各頂点に補間されるカラー値 (ピクセルシェーダーへ送る)
+    @location(1) local_pos: vec2f,
 }
 
 // =========================================================================
@@ -69,8 +70,11 @@ struct VertexOutput {
         sin(angle), cos(angle),
     );
 
+    let max_radius = max(1.0, 0.5 + render_params.glow_width);
+
     // 1. メッシュの大きさを小さく縮小（0.01倍）し、進行方向へ回転
-    var rotated_pos = rotation * (model.position.xy * 0.02 * size_scale);
+    // var rotated_pos = rotation * (model.position.xy * 0.02 * size_scale);
+    var rotated_pos = rotation * (model.position.xy * 0.02 * size_scale * max_radius);
 
     // 2. 画面のアスペクト比でX軸を補正（画面が横長でもアスペクト比で割ることで横伸びする歪みを防ぐ）
     rotated_pos.x = rotated_pos.x / render_params.aspect_ratio;
@@ -92,19 +96,54 @@ struct VertexOutput {
     // 位置が安定しているときは青、安定していないほど赤
     let color_slow = vec3f(0.0, 0.0, 1.0);
     let color_fast = vec3f(1.0, 0.0, 0.0);
+    let color_mid  = vec3f(0.0, 1.0, 0.0);
     // 線形補間（mix）でスピードに合わせた中間色を作る
-    let final_rgb = mix(color_slow, color_fast, t);
+    // let final_rgb = mix(color_slow, color_fast, t);
+
+    // let final_rgb = select(
+    //     mix(color_mid, color_fast, (t - 0.5) * 2.0),
+    //     mix(color_slow, color_mid, t * 2.0),
+    //     t < 0.5
+    // );
+
+    let hue = (240.0 - t * 240.0) / 360.0; // 240度(青)から0度(赤)へマッピング
+    let final_rgb = hsv_to_rgb(vec3f(hue, 1.0, 1.0)); 
 
     // 最終カラー情報をセットしてフラグメントシェーダーへ送る
-    out.color = vec4f(final_rgb, 1.0);
+    out.color = final_rgb;
+    // out.local_pos = model.position.xy;
+
+    out.local_pos = model.position.xy * max_radius;
 
     return out;
 }
 
+// HSVからRGBへの変換ヘルパー関数（シェーダーのグローバル領域に定義）
+fn hsv_to_rgb(c: vec3f) -> vec3f {
+    let K = vec4f(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    let p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, vec3f(0.0), vec3f(1.0)), c.y);
+}
+
 // --- フラグメントシェーダー (fs_main) ---
-// ピクセルごとの最終的な色をそのまま出力する
 @fragment fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    return in.color;
+    // --- 円の周りをぼかす ---
+    let distance_from_center = length(in.local_pos);
+    let circle_radius = 0.5;
+    let glow_width = render_params.glow_width;
+    let total_radius = circle_radius + glow_width;
+    var alpha: f32 = 0.0;
+
+    if (distance_from_center < circle_radius) {
+        alpha = 1.0;
+    } else if (distance_from_center < total_radius) {
+        alpha = 1.0 - smoothstep(circle_radius, total_radius, distance_from_center);
+        alpha = alpha * 0.8;
+    } else {
+        alpha = 0.0;
+    }
+
+    return vec4f(in.color, alpha);
 }
 
 // --- 粒子（ボイド）のデータ構造 ---

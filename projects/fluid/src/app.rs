@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crate::boids::{Boids, INITIAL_NUM_BOIDS};
 use crate::gpu::State;
 use egui::Context as EguiContext;
-use egui_plot::{Legend, Line, Plot, PlotPoints};
 use egui_winit::State as EguiState;
 use web_time::Instant;
 use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
@@ -47,11 +46,12 @@ impl ApplicationHandler for App {
         self.last_update_time = Some(Instant::now());
         self.boids = Some(Boids {
             pause: false,
-            delay: 16,
+            delay: 0,
             next_tick: false,
             params: crate::boids::BoidsParams::default(),
             num_boids: INITIAL_NUM_BOIDS,
             trails: true,
+            glow_width: 1.0,
         });
     }
 
@@ -141,6 +141,11 @@ impl ApplicationHandler for App {
                         }
 
                         ui.checkbox(&mut boids.trails, "Enable Trails");
+                        
+                        ui.add(
+                            egui::Slider::new(&mut boids.glow_width, 0.1..=100.0)
+                                .text("Glow Width"),
+                        );
 
                         ui.separator();
                         ui.add(
@@ -194,7 +199,7 @@ impl ApplicationHandler for App {
                         pixels_per_point: egui_output.pixels_per_point,
                     };
 
-                    gpu.render(&paint_jobs, &screen_descripter, boids.num_boids, boids.trails);
+                    gpu.render(&paint_jobs, &screen_descripter, boids.num_boids, boids.trails, boids.glow_width);
                 }
 
                 if let Some(window) = &self.window {
@@ -227,11 +232,12 @@ impl App {
             last_update_time: Some(Instant::now()),
             boids: Some(Boids {
                 pause: false,
-                delay: 16,
+                delay: 0,
                 next_tick: false,
                 params: crate::boids::BoidsParams::default(),
                 num_boids: INITIAL_NUM_BOIDS,
                 trails: true,
+                glow_width: 1.0,
             }),
         }
     }
