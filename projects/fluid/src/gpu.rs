@@ -30,23 +30,8 @@ pub struct RenderParams {
     pub num_boids: u32,
     pub aspect_ratio: f32,
     pub use_trails: u32,
-    pub _p: u32,
+    pub glow_width: f32,
 }
-
-pub const TRIANGLE: &[Vertex] = &[
-    Vertex {
-        position: [1.5, 0.0, 0.0],
-        color: [1.0, 1.0, 1.0, 1.0],
-    },
-    Vertex {
-        position: [-1.0, 0.5, 0.0],
-        color: [1.0, 1.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [-1.0, -0.5, 0.0],
-        color: [1.0, 1.0, 1.0, 0.0],
-    },
-];
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -78,14 +63,23 @@ fn generate_circle_vertices(segments: usize) -> Vec<Vertex> {
         // 現在の角度と、隣の角度（ラジアン）を計算
         let theta1 = (i as f32 / segments as f32) * 2.0 * std::f32::consts::PI;
         let theta2 = ((i + 1) as f32 / segments as f32) * 2.0 * std::f32::consts::PI;
-        
+
         // 1つの扇形（三角形）を構築して追加
         // 中心点
-        vertices.push(Vertex { position: [0.0, 0.0, 0.0], color: [1.0, 1.0, 1.0, 1.0] });
+        vertices.push(Vertex {
+            position: [0.0, 0.0, 0.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+        });
         // 円周上の点 1
-        vertices.push(Vertex { position: [theta1.cos(), theta1.sin(), 0.0], color: [1.0, 1.0, 1.0, 1.0] });
+        vertices.push(Vertex {
+            position: [theta1.cos(), theta1.sin(), 0.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+        });
         // 円周上の点 2
-        vertices.push(Vertex { position: [theta2.cos(), theta2.sin(), 0.0], color: [1.0, 1.0, 1.0, 1.0] });
+        vertices.push(Vertex {
+            position: [theta2.cos(), theta2.sin(), 0.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+        });
     }
     vertices
 }
@@ -145,21 +139,20 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let render_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Render Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
+        let render_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Render Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
-                },
-            ],
-        });
+                }],
+            });
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -354,24 +347,20 @@ impl State {
             num_boids: crate::boids::INITIAL_NUM_BOIDS as u32,
             aspect_ratio: size.width as f32 / size.height as f32,
             use_trails: 1,
-            _p: 0,
+            glow_width: 1.0,
         };
-        let render_params_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Render Params Buffer"),
-                contents: bytemuck::cast_slice(&[initial_render_params]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            }
-        );
+        let render_params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Render Params Buffer"),
+            contents: bytemuck::cast_slice(&[initial_render_params]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
         let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render Bind Group"),
             layout: &render_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: render_params_buffer.as_entire_binding(),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: render_params_buffer.as_entire_binding(),
+            }],
         });
 
         let egui_renderer = EguiRenderer::new(&device, config.format, RendererOptions::default());
@@ -436,6 +425,7 @@ impl State {
         screen_descriptor: &egui_wgpu::ScreenDescriptor,
         num_boids: usize,
         use_trails: bool,
+        glow_width: f32,
     ) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
@@ -469,9 +459,13 @@ impl State {
             num_boids: num_boids as u32,
             aspect_ratio,
             use_trails: if use_trails { 1 } else { 0 },
-            _p: 0,
+            glow_width,
         };
-        self.queue.write_buffer(&self.render_params_buffer, 0, bytemuck::cast_slice(&[render_params]));
+        self.queue.write_buffer(
+            &self.render_params_buffer,
+            0,
+            bytemuck::cast_slice(&[render_params]),
+        );
 
         self.egui_renderer.update_buffers(
             &self.device,
@@ -510,7 +504,7 @@ impl State {
             let (src, _dst) = self.boids_buffers.get_buffers();
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.render_bind_group, &[]); 
+            render_pass.set_bind_group(0, &self.render_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, src.slice(..));
             render_pass.draw(0..(32 * 3) as u32, 0..num_boids as u32);

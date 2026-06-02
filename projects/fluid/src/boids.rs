@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::gpu::State;
 
-pub const INITIAL_NUM_BOIDS: usize = 1500;
+pub const INITIAL_NUM_BOIDS: usize = 750;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -39,6 +39,7 @@ pub struct Boids {
     pub params: BoidsParams,
     pub num_boids: usize,
     pub trails: bool,
+    pub glow_width: f32,
 }
 
 #[repr(C)]
