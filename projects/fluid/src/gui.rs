@@ -53,6 +53,7 @@ impl GuiSystem {
 
         egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
             ui.heading("Fluid Simulator Control Panel");
+            ui.label(format!("Num Particles: {}", fluid.num_particles));
             ui.separator();
 
             ui.checkbox(&mut fluid.pause, "Pause");
@@ -61,8 +62,12 @@ impl GuiSystem {
                 fluid.next_step = true;
             }
 
-            ui.label(format!("Num Particles: {}", fluid.num_particles));
             ui.add(egui::Slider::new(&mut fluid.glow_width, 0.1..=100.0).text("Glow Width"));
+
+            ui.add(
+                egui::Slider::new(&mut fluid.cursor_radius, 0.0..=0.5)
+                    .text("Cursor Radius"),
+            );
 
             ui.separator();
             ui.add(
@@ -74,23 +79,23 @@ impl GuiSystem {
                     .text("Look-Ahead Prediction"),
             );
             ui.add(
-                egui::Slider::new(&mut fluid.params.separation_weight, 0.0001..=10.000)
+                egui::Slider::new(&mut fluid.params.separation_weight, 0.0..=10.0)
                     .text("Pressure Strength (k)"),
             );
             ui.add(
-                egui::Slider::new(&mut fluid.params.alignment_weight, 0.0001..=10.000)
+                egui::Slider::new(&mut fluid.params.alignment_weight, 0.0..=10.0)
                     .text("Viscosity (Friction)"),
             );
             ui.add(
-                egui::Slider::new(&mut fluid.params.cohesion_weight, 0.0001..=10.000)
+                egui::Slider::new(&mut fluid.params.cohesion_weight, 0.0..=10.0)
                     .text("Rest Density Scale"),
             );
             ui.add(
-                egui::Slider::new(&mut fluid.params.max_speed, 0.005..=0.05)
+                egui::Slider::new(&mut fluid.params.max_speed, 0.00..=0.05)
                     .text("Max Speed Limit"),
             );
             ui.add(
-                egui::Slider::new(&mut fluid.params.min_speed, 0.0..=0.02).text("Min Speed Limit"),
+                egui::Slider::new(&mut fluid.params.min_speed, 0.00..=0.02).text("Min Speed Limit"),
             );
         });
 
