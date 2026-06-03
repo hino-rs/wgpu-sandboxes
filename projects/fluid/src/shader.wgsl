@@ -50,6 +50,13 @@ struct ParticlesParams {
     min_speed: f32,
 }
 
+struct MouseState {
+    pos_x: f32,
+    pos_y: f32,
+    is_active: u32,
+    button: u32,
+}
+
 // =====================================================
 // Bindings
 // =====================================================
@@ -58,6 +65,7 @@ struct ParticlesParams {
 
 @group(0) @binding(2) var<uniform> particles_params: ParticlesParams;
 @group(0) @binding(3) var<uniform> render_params: RenderParams;
+@group(0) @binding(4) var<uniform> mouse_state: MouseState;
 
 // =====================================================
 // Utilitys

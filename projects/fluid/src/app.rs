@@ -1,14 +1,26 @@
 use std::sync::Arc;
 use web_time::Instant;
 use wgpu::SurfaceTexture;
+use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::dpi::PhysicalPosition;
+use winit::event::{MouseButton, WindowEvent};
 use winit::window::Window;
 
+use crate::common::to_ndc;
 use crate::fluid::FluidSim;
 use crate::gpu::GpuContext;
 use crate::gui::GuiSystem;
 use crate::renderer::Renderer;
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MouseStateUniform {
+    pub pos_x: f32,
+    pub pos_y: f32,
+    pub is_active: u32,
+    pub button: u32,
+}
 
 #[derive(Default)]
 pub struct App {
@@ -18,6 +30,31 @@ pub struct App {
     gui: Option<GuiSystem>,
     fluid: Option<FluidSim>,
     last_update_time: Option<Instant>,
+    mouse_state: Option<MouseState>,
+    mouse_state_buffer: Option<wgpu::Buffer>,
+}
+
+pub enum Button {
+    Left,
+    Right,
+    None,
+}
+
+impl Button {
+    pub fn to_u32(&self) -> u32 {
+        match self {
+            Button::Left => 1,
+            Button::Right => 2,
+            Button::None => 0,
+        }
+    }
+}
+
+pub struct MouseState {
+    pub pos_x: f64,
+    pub pos_y: f64,
+    pub button: Button,
+    pub is_pressed: u32,
 }
 
 impl ApplicationHandler for App {
@@ -43,6 +80,12 @@ impl ApplicationHandler for App {
         self.fluid = Some(fluid);
         self.gui = Some(gui);
         self.last_update_time = Some(Instant::now());
+        self.mouse_state = Some(MouseState {
+            pos_x: 0.0,
+            pos_y: 0.0,
+            button: Button::None,
+            is_pressed: 0,
+        });
     }
 
     fn window_event(
@@ -69,11 +112,23 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let (Some(gpu), Some(fluid), Some(last_update_time)) =
-                    (&self.gpu, &mut self.fluid, &mut self.last_update_time)
+                if let (Some(gpu), Some(fluid), Some(last_update_time), Some(mouse_state)) =
+                    (&self.gpu, &mut self.fluid, &mut self.last_update_time, &self.mouse_state)
                 {
                     // 最新のパラメータをGPUのUnifrom Bufferに書き込む
                     fluid.update_params(gpu);
+
+                    let mouse_uniform = MouseStateUniform {
+                        pos_x: mouse_state.pos_x as f32,
+                        pos_y: mouse_state.pos_y as f32,
+                        is_active: mouse_state.is_pressed,
+                        button: mouse_state.button.to_u32(),
+                    };
+                    gpu.queue.write_buffer(
+                        &fluid.mouse_buffer,
+                        0,
+                        bytemuck::cast_slice(&[mouse_uniform]),
+                    );
 
                     let now = Instant::now();
                     let elapsed = now.duration_since(*last_update_time);
@@ -104,6 +159,29 @@ impl ApplicationHandler for App {
                     panic!("SOME APP FIELD IS NOT INITIALIZED");
                 }
             }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                if let (Some(mouse_state), Some(window), Some(gpu)) = (&mut self.mouse_state, &self.window, &self.gpu) {
+                    let ndc_pos = to_ndc(&window.inner_size(), &position);
+                    mouse_state.pos_x = ndc_pos[0];
+                    mouse_state.pos_y = ndc_pos[1];
+                }
+            }
+
+            WindowEvent::MouseInput { state, button, .. } => {
+                if let Some(mouse_state) = &mut self.mouse_state {
+                    match button {
+                        MouseButton::Left => {
+                            mouse_state.button = Button::Left;
+                        } 
+                        MouseButton::Right => {
+                            mouse_state.button = Button::Right;
+                        }
+                        _ => mouse_state.button = Button::None,
+                    }
+                    mouse_state.is_pressed = if state.is_pressed() { 1 } else { 0 };
+                }
+            },
 
             _ => {}
         }
@@ -140,6 +218,8 @@ impl App {
             fluid.get_buffers(),
             fluid.num_particles,
         );
+
+
         gui.draw_ui(gpu, window, fluid, &mut encoder, &view);
         renderer.update_render_params(gpu, fluid);
 

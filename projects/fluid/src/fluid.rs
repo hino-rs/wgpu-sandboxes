@@ -1,4 +1,4 @@
-use crate::gpu::GpuContext;
+use crate::{app::MouseStateUniform, gpu::GpuContext};
 use wgpu::util::DeviceExt;
 
 // =======================================================
@@ -15,6 +15,7 @@ pub struct FluidSim {
     pub num_particles: usize,
     pub params: ParticlesParams,
     pub params_buffer: wgpu::Buffer,
+    pub mouse_buffer: wgpu::Buffer,
 
     // Compute
     pub compute_pipeline: wgpu::ComputePipeline,
@@ -106,6 +107,17 @@ impl FluidSim {
                         },
                         count: None,
                     },
+                    // Binding 4: マウス操作用バッファ
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
@@ -155,6 +167,19 @@ impl FluidSim {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        let mouse_data = MouseStateUniform {
+            pos_x: 0.0,
+            pos_y: 0.0,
+            is_active: 0,
+            button: 0,
+        };
+        
+        let mouse_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Brush Buffer"),
+            contents: bytemuck::cast_slice(&[mouse_data]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let compute_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Compute Bind Group A"),
             layout: &compute_bind_group_layout,
@@ -171,6 +196,10 @@ impl FluidSim {
                     binding: 2,
                     resource: params_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: mouse_buffer.as_entire_binding(),
+                }
             ],
         });
 
@@ -191,6 +220,10 @@ impl FluidSim {
                     binding: 2,
                     resource: params_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: mouse_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -202,6 +235,7 @@ impl FluidSim {
             num_particles: INITIAL_NUM_FLUID_PARTICLES,
             params: ParticlesParams::default(),
             params_buffer,
+            mouse_buffer,
 
             compute_pipeline,
             particles_buffers,

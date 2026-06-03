@@ -3,7 +3,7 @@ mod fluid;
 mod gpu;
 mod gui;
 mod renderer;
-mod types;
+mod common;
 
 use app::App;
 use winit::event_loop::EventLoop;
