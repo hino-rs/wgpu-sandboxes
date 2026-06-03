@@ -2,12 +2,13 @@
 // Constants
 // =====================================================
 const PI: f32 = 3.14159265358979323846264338327950288;
-const DAMPING_AIR: f32 = 0.98;           // 空気抵抗：毎フレーム失われる速度の割合。これがないとエネルギーが溜まり続けて爆発します。
-const TIME_STEP: f32 = 0.000001;              // タイムステップ：1コマごとの時間の進み幅。
+const DAMPING_AIR: f32 = 0.98;   // 空気抵抗
+const TIME_STEP: f32 = 0.000001; 
 
-const GRAVITY: vec2f = vec2f(0.0, -120.0); // 重力：下方向への自然な落下の強さ。
-const WALL_BOUNDS: f32 = 0.95;           // 壁の境界：-1.0〜1.0 の正方形の箱の内側を指定。
-const WALL_DAMPING: f32 = 0.4;          // 壁の反発係数：壁にぶつかった時にどれだけ勢いが吸収されるか（0.0〜1.0）。
+const GRAVITY: vec2f = vec2f(0.0, -120.0); // 重力
+const WALL_BOUNDS: f32 = 0.98; // 壁の境界
+const WALL_DAMPING: f32 = 0.4; // 壁の反発係数（0.0〜1.0）。
+const SIZE_SCALE: f32 = 0.01;
 
 // =====================================================
 // Structures
@@ -122,7 +123,7 @@ fn vs_main(
     var out: VertexOutput;
 
     let num_particles = render_params.num_particles;
-    let size_scale = 0.02;
+    let size_scale = SIZE_SCALE;
 
     let max_radius = max(1.0, 0.5 + render_params.glow_width);
     var pos = model.position.xy * size_scale * max_radius;

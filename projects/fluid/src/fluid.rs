@@ -1,10 +1,12 @@
+use std::f32::consts::PI;
+
 use crate::{app::MouseStateUniform, gpu::GpuContext};
 use wgpu::util::DeviceExt;
 
 // =======================================================
 // 定義
 // =======================================================
-pub const INITIAL_NUM_FLUID_PARTICLES: usize = 1500;
+pub const INITIAL_NUM_FLUID_PARTICLES: usize = 2000;
 
 // 流体シミュレーター
 pub struct FluidSim {
@@ -174,7 +176,7 @@ impl FluidSim {
             radius: 0.0,
             button: 0,
         };
-        
+
         let mouse_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Brush Buffer"),
             contents: bytemuck::cast_slice(&[mouse_data]),
@@ -200,7 +202,7 @@ impl FluidSim {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: mouse_buffer.as_entire_binding(),
-                }
+                },
             ],
         });
 
@@ -249,16 +251,22 @@ impl FluidSim {
     fn generate_particles(num: usize) -> Vec<Particle> {
         let mut particles = Vec::with_capacity(num);
 
-        for _ in 0..num {
+        let c = (num as f32).sqrt().ceil() as usize + 9;
+        let r = ((num as f32) / (c as f32)).ceil() as usize - 9;
+
+        for n in 0..num {
+            let col = n % c;
+            let row = n / c;
+
+            let x_percent = col as f32 / (c - 1).max(1) as f32;
+            let y_percent = row as f32 / (r - 1).max(1) as f32;
+
+            let x_ndc = (x_percent * 2.0) - 1.0;
+            let y_ndc = 1.0 - (y_percent * 2.0) + 0.3;
+
             particles.push(Particle {
-                position: [
-                    rand::random_range(-1.0..=1.0),
-                    rand::random_range(-1.0..=1.0),
-                ],
-                velocity: [
-                    rand::random_range(-0.1..=0.1),
-                    rand::random_range(-0.1..=0.1),
-                ],
+                position: [x_ndc * 0.7, y_ndc * 0.7],
+                velocity: [0.0, 0.0],
             });
         }
 
