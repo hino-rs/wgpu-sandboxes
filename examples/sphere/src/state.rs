@@ -300,7 +300,7 @@ impl State {
             }),
 
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
+                topology: wgpu::PrimitiveTopology::LineList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
@@ -319,7 +319,7 @@ impl State {
             cache: None,
         });
 
-        let (vertices, indices) = generate_uv_sphere(1.0, 32, 32);
+        let (vertices, indices) = generate_uv_sphere(1.0, 8, 8);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vetex Buffer"),
