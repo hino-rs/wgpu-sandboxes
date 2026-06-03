@@ -1,20 +1,23 @@
 use std::sync::Arc;
-
-use crate::boids::{Boids, INITIAL_NUM_BOIDS};
-use crate::gpu::State;
-use egui::Context as EguiContext;
-use egui_winit::State as EguiState;
+use wgpu::SurfaceTexture;
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::window::Window;
 use web_time::Instant;
-use winit::{application::ApplicationHandler, event::WindowEvent, window::Window};
+
+use crate::gpu::GpuContext;
+use crate::renderer::Renderer;
+use crate::fluid::FluidSim;
+use crate::gui::GuiSystem;
 
 #[derive(Default)]
 pub struct App {
-    window: Option<Arc<Window>>,
-    gpu: Option<State>,
-    egui_ctx: EguiContext,
-    egui_state: Option<EguiState>,
+    window:     Option<Arc<Window>>,
+    gpu:        Option<GpuContext>,
+    renderer:   Option<Renderer>,
+    gui:        Option<GuiSystem>,
+    fluid:      Option<FluidSim>,
     last_update_time: Option<Instant>,
-    boids: Option<Boids>,
 }
 
 impl ApplicationHandler for App {
@@ -25,34 +28,21 @@ impl ApplicationHandler for App {
 
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes().with_title("LifeGame"))
+                .create_window(Window::default_attributes().with_title("Fluid Simlator"))
                 .unwrap(),
         );
 
-        let gpu = pollster::block_on(State::new(Arc::clone(&window)));
-
-        let egui_state = EguiState::new(
-            self.egui_ctx.clone(),
-            egui::ViewportId::ROOT,
-            &window,
-            None,
-            None,
-            None,
-        );
+        let gpu = GpuContext::init(&window);
+        let fluid = FluidSim::init(&gpu);
+        let renderer = Renderer::init(&gpu, &window, &fluid.params_buffer);
+        let gui = GuiSystem::init(&gpu);
 
         self.window = Some(window);
         self.gpu = Some(gpu);
-        self.egui_state = Some(egui_state);
+        self.renderer = Some(renderer);
+        self.fluid = Some(fluid);
+        self.gui = Some(gui);
         self.last_update_time = Some(Instant::now());
-        self.boids = Some(Boids {
-            pause: false,
-            delay: 0,
-            next_tick: false,
-            params: crate::boids::BoidsParams::default(),
-            num_boids: INITIAL_NUM_BOIDS,
-            trails: true,
-            glow_width: 1.0,
-        });
     }
 
     fn window_event(
@@ -60,19 +50,12 @@ impl ApplicationHandler for App {
         event_loop: &winit::event_loop::ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
-    ) {
-        if let Some(egui_state) = &mut self.egui_state {
-            let response = egui_state.on_window_event(self.window.as_ref().unwrap(), &event);
-
-            if response.consumed {
-                return;
-            }
-        }
-
+    )
+    {
         match event {
-            WindowEvent::Resized(physical_size) => {
+            WindowEvent::Resized(phisical_size) => {
                 if let Some(gpu) = &mut self.gpu {
-                    gpu.resize(physical_size);
+                    gpu.resize(phisical_size);
                 }
             }
 
@@ -80,130 +63,50 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
 
-            // WindowEvent::KeyboardInput {
-            //     device_id,
-            //     event,
-            //     is_synthetic,
-            // } => {}
             WindowEvent::RedrawRequested => {
                 if let (
-                    Some(gpu),
                     Some(window),
-                    Some(egui_state),
+                    Some(gpu),
+                    Some(renderer),
+                    Some(gui),
+                    Some(fluid),
                     Some(last_update_time),
-                    Some(boids),
                 ) = (
-                    &mut self.gpu,
-                    &mut self.window,
-                    &mut self.egui_state,
+                    &self.window,
+                    &self.gpu,
+                    &self.renderer,
+                    &self.gui,
+                    &mut self.fluid,
                     &mut self.last_update_time,
-                    &mut self.boids,
                 ) {
-                    // 最新のパラメータをGPUのUniform Bufferに書き込む
-                    gpu.update_params(&boids.params);
+                    // 最新のパラメータをGPUのUnifrom Bufferに書き込む
+                    fluid.update_params(&gpu);
 
                     let now = Instant::now();
                     let elapsed = now.duration_since(*last_update_time);
-                    if !boids.pause {
-                        if elapsed.as_millis() >= boids.delay as u128 {
-                            gpu.update_boids(boids.num_boids);
+
+                    let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Render Encoder") });
+
+                    if !fluid.pause {
+                        if elapsed.as_millis() >= fluid.delay as u128 {
+                            fluid.update(&mut encoder, &gpu);
                             *last_update_time = now;
                         }
                     } else {
-                        if boids.next_tick {
-                            gpu.update_boids(boids.num_boids);
-                            boids.next_tick = false;
+                        if fluid.next_step {
+                            fluid.update(&mut encoder, &gpu);
+                            fluid.next_step = false;
                             *last_update_time = now;
                         }
                     }
+                    gpu.queue.submit(std::iter::once(encoder.finish()));
+                    self.render();
 
-                    let raw_input = egui_state.take_egui_input(window);
-                    self.egui_ctx.begin_pass(raw_input);
-
-                    egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
-                        ui.heading("Boids Control Panel");
-                        ui.separator();
-
-                        ui.checkbox(&mut boids.pause, "Pause");
-                        ui.add(
-                            egui::Slider::new(&mut boids.delay, 0..=100).text("Frame Delay (ms)"),
-                        );
-                        if boids.pause {
-                            if ui.button("Step 1 Frame").clicked() {
-                                boids.next_tick = true;
-                            }
-                        }
-
-                        if ui.add(
-                            egui::Slider::new(&mut boids.num_boids, 1..=32768).text("Num Boids"),
-                        ).changed() {
-                            boids.change_num_boids(gpu);
-                        }
-
-                        ui.checkbox(&mut boids.trails, "Enable Trails");
-                        
-                        ui.add(
-                            egui::Slider::new(&mut boids.glow_width, 0.1..=100.0)
-                                .text("Glow Width"),
-                        );
-
-                        ui.separator();
-                        ui.add(
-                            egui::Slider::new(&mut boids.params.visual_range, 0.01..=0.30)
-                                .text("Kernel Radius (h)"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut boids.params.protected_range, 0.0..=2.0)
-                                .text("Look-Ahead Prediction"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut boids.params.separation_weight, 0.0001..=10.000)
-                                .text("Pressure Strength (k)"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut boids.params.alignment_weight, 0.0001..=10.000)
-                                .text("Viscosity (Friction)"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut boids.params.cohesion_weight, 0.0001..=10.000)
-                                .text("Rest Density Scale"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut boids.params.max_speed, 0.005..=0.05)
-                                .text("Max Speed Limit"),
-                        );
-                        ui.add(
-                            egui::Slider::new(&mut boids.params.min_speed, 0.0..=0.02)
-                                .text("Min Speed Limit"),
-                        );
-                    });
-
-                    let egui_output = self.egui_ctx.end_pass();
-                    egui_state.handle_platform_output(window, egui_output.platform_output);
-
-                    for (id, image_delta) in &egui_output.textures_delta.set {
-                        gpu.egui_renderer
-                            .update_texture(&gpu.device, &gpu.queue, *id, image_delta);
+                    if let Some(window) = &self.window {
+                        window.request_redraw();
                     }
-
-                    for id in &egui_output.textures_delta.free {
-                        gpu.egui_renderer.free_texture(id);
-                    }
-
-                    let paint_jobs = self
-                        .egui_ctx
-                        .tessellate(egui_output.shapes, egui_output.pixels_per_point);
-
-                    let screen_descripter = egui_wgpu::ScreenDescriptor {
-                        size_in_pixels: [gpu.config.width, gpu.config.height],
-                        pixels_per_point: egui_output.pixels_per_point,
-                    };
-
-                    gpu.render(&paint_jobs, &screen_descripter, boids.num_boids, boids.trails, boids.glow_width);
-                }
-
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+                } else {
+                    panic!("SOME APP FIELD IS NOT INITIALIZED");
                 }
             }
 
@@ -213,32 +116,39 @@ impl ApplicationHandler for App {
 }
 
 impl App {
-    pub fn with_precreated(window: Arc<Window>, state: State) -> Self {
-        let egui_ctx = EguiContext::default();
-        let egui_state = EguiState::new(
-            egui_ctx.clone(),
-            egui::ViewportId::ROOT,
-            &window,
-            None,
-            None,
-            None,
-        );
+    fn render(&mut self) {
+        let (Some(gpu), Some(fluid), Some(renderer)) = (&self.gpu, &self.fluid, &mut self.renderer) else {
+            panic!("SOME APP FIELD IS NONE");
+        };
 
-        Self {
-            window: Some(window),
-            gpu: Some(state),
-            egui_ctx,
-            egui_state: Some(egui_state),
-            last_update_time: Some(Instant::now()),
-            boids: Some(Boids {
-                pause: false,
-                delay: 0,
-                next_tick: false,
-                params: crate::boids::BoidsParams::default(),
-                num_boids: INITIAL_NUM_BOIDS,
-                trails: true,
-                glow_width: 1.0,
-            }),
+        let Some(frame) = Self::get_surface_texture(&gpu) else { return; };
+        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Render Encoder") });
+
+        renderer.draw_scene(&mut encoder, &view, fluid.get_buffers(), fluid.num_particles);
+        renderer.update_render_params(&gpu, &fluid, 10.0);
+
+        gpu.queue.submit(std::iter::once(encoder.finish()));
+        frame.present();
+    }
+
+    fn get_surface_texture(gpu: &GpuContext) -> Option<SurfaceTexture> {
+        match gpu.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame) => Some(frame),
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                gpu.surface.configure(&gpu.device, &gpu.config);
+                None
+            }
+            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
+                gpu.surface.configure(&gpu.device, &gpu.config);
+                Some(frame)
+            }
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                None
+            }
+            _ => { None }
         }
     }
 }
