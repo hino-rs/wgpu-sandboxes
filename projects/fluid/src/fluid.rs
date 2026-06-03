@@ -21,7 +21,6 @@ pub struct FluidSim {
     pub particles_buffers: ParticlesBuffers,
     pub compute_bind_group_a: wgpu::BindGroup,
     pub compute_bind_group_b: wgpu::BindGroup,
-    pub compute_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 // 流体粒子
@@ -37,7 +36,7 @@ pub struct Particle {
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ParticlesParams {
     pub visual_range: f32,      // 他者への認識範囲
-    pub protected_range: f32,   // 
+    pub protected_range: f32,   //
     pub separation_weight: f32, //
     pub alignment_weight: f32,  //
     pub cohesion_weight: f32,   //
@@ -206,14 +205,9 @@ impl FluidSim {
 
             compute_pipeline,
             particles_buffers,
-            compute_bind_group_layout,
             compute_bind_group_a,
             compute_bind_group_b,
         }
-    }
-
-    pub fn change_num_particles(&self, gpu: &mut GpuContext) {
-
     }
 
     fn generate_particles(num: usize) -> Vec<Particle> {
@@ -244,10 +238,11 @@ impl FluidSim {
     }
 
     pub fn update_params(&mut self, gpu: &GpuContext) {
-        gpu.queue.write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[self.params]))
+        gpu.queue
+            .write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[self.params]))
     }
 
-    pub fn update(&mut self, encoder: &mut wgpu::CommandEncoder, gpu: &GpuContext) {
+    pub fn update(&mut self, encoder: &mut wgpu::CommandEncoder) {
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Compute Pass"),
             timestamp_writes: None,
@@ -256,7 +251,7 @@ impl FluidSim {
         compute_pass.set_pipeline(&self.compute_pipeline);
 
         // ダブルバッファリング
-        let bind_group = if self.particles_buffers.frame_count % 2 == 0 {
+        let bind_group = if self.particles_buffers.frame_count.is_multiple_of(2) {
             &self.compute_bind_group_a
         } else {
             &self.compute_bind_group_b
@@ -264,13 +259,12 @@ impl FluidSim {
 
         compute_pass.set_bind_group(0, bind_group, &[]);
 
-        let workgroup_count = (self.num_particles + 63) / 64;
+        let workgroup_count = (self.num_particles + 63).div_ceil(64);
         compute_pass.dispatch_workgroups(workgroup_count as u32, 1, 1);
-    
+
         self.particles_buffers.frame_count += 1;
     }
 }
-
 
 // -------------------------------------------------------
 // Particle
@@ -310,9 +304,9 @@ impl Default for ParticlesParams {
             cohesion_weight: 3.0,
             max_speed: 0.02,
             min_speed: 0.0,
-            
+
             _p: 0.0,
-        } 
+        }
     }
 }
 
@@ -321,7 +315,7 @@ impl Default for ParticlesParams {
 // -------------------------------------------------------
 impl ParticlesBuffers {
     pub fn get_buffers(&self) -> (&wgpu::Buffer, &wgpu::Buffer) {
-        if self.frame_count % 2 == 0 {
+        if self.frame_count.is_multiple_of(2) {
             (&self.buffer_a, &self.buffer_b)
         } else {
             (&self.buffer_b, &self.buffer_a)

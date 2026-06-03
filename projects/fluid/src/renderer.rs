@@ -1,4 +1,8 @@
-use crate::{fluid::{FluidSim, INITIAL_NUM_FLUID_PARTICLES, Particle}, gpu::GpuContext, types::Rgb};
+use crate::{
+    fluid::{FluidSim, INITIAL_NUM_FLUID_PARTICLES, Particle},
+    gpu::GpuContext,
+    types::Rgb,
+};
 use wgpu::{CommandEncoder, TextureView, util::DeviceExt};
 use winit::window::Window;
 
@@ -78,7 +82,7 @@ impl Renderer {
                             min_binding_size: None,
                         },
                         count: None,
-                    },  
+                    },
                 ],
             });
 
@@ -149,14 +153,15 @@ impl Renderer {
             label: Some("Render Bind Group"),
             layout: &render_bind_group_layout,
             entries: &[
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: particles_params_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: render_params_buffer.as_entire_binding(),
-            }],
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: particles_params_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: render_params_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         let circle_vertices = generate_circle_vertices(32);
@@ -179,16 +184,16 @@ impl Renderer {
     }
 
     pub fn draw_scene(
-        &self, 
-        encoder: &mut CommandEncoder, 
-        view: &TextureView, 
-        (src, _dst): (&wgpu::Buffer, &wgpu::Buffer), 
+        &self,
+        encoder: &mut CommandEncoder,
+        view: &TextureView,
+        (src, _dst): (&wgpu::Buffer, &wgpu::Buffer),
         num_particles: usize,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view,
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
@@ -207,21 +212,21 @@ impl Renderer {
         render_pass.set_bind_group(0, &self.render_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, src.slice(..));
-        render_pass.draw(0..(32 * 3) as u32, 0..num_particles as u32);        
+        render_pass.draw(0..(32 * 3) as u32, 0..num_particles as u32);
     }
 
     pub fn update_render_params(&mut self, gpu: &GpuContext, fluid: &FluidSim) {
         let aspect_ratio = gpu.config.width as f32 / gpu.config.height as f32;
-        
+
         let render_params = RenderParams {
             num_particles: fluid.num_particles as u32,
             aspect_ratio,
             glow_width: fluid.glow_width,
         };
-        
+
         gpu.queue.write_buffer(
-            &self.render_params_buffer, 
-            0, 
+            &self.render_params_buffer,
+            0,
             bytemuck::cast_slice(&[render_params]),
         );
 
@@ -255,4 +260,3 @@ fn generate_circle_vertices(segments: usize) -> Vec<Vertex> {
     }
     vertices
 }
-

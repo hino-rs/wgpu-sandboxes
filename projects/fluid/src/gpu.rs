@@ -1,4 +1,3 @@
-use core::num;
 use std::sync::Arc;
 
 use winit::window::Window;
@@ -13,12 +12,12 @@ pub struct GpuContext {
 
 impl GpuContext {
     pub fn init(window: &Arc<Window>) -> Self {
-        pollster::block_on(Self::new(Arc::clone(&window)))
+        pollster::block_on(Self::new(Arc::clone(window)))
     }
 
     async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
-        
+
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             flags: wgpu::InstanceFlags::default(),
