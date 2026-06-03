@@ -9,7 +9,6 @@ const GRAVITY: vec2f = vec2f(0.0, -120.0); // 重力：下方向への自然な�
 const WALL_BOUNDS: f32 = 0.95;           // 壁の境界：-1.0〜1.0 の正方形の箱の内側を指定。
 const WALL_DAMPING: f32 = 0.4;          // 壁の反発係数：壁にぶつかった時にどれだけ勢いが吸収されるか（0.0〜1.0）。
 
-
 // =====================================================
 // Structures
 // =====================================================
@@ -53,7 +52,7 @@ struct ParticlesParams {
 struct MouseState {
     pos_x: f32,
     pos_y: f32,
-    is_active: u32,
+    radius: f32,
     button: u32,
 }
 
@@ -264,6 +263,26 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // すべての力（通常圧力 + 近接圧力 + 粘性 + 重力）を現在の速度に加算
     particle.velocity += (pressure_force + viscosity_force + GRAVITY) * TIME_STEP;
 
+    // マウスの影響
+    if (mouse_state.button != 0u) {
+        let mouse_pos = vec2f(mouse_state.pos_x, mouse_state.pos_y);
+        let dist = distance(mouse_pos, particle.position);
+        
+        if (dist < mouse_state.radius && dist > 0.0) {
+            let ratio = dist / mouse_state.radius;
+            let strength = 1.0 - ratio;
+            let dir_normalized = normalize(mouse_pos - particle.position);
+
+            let force_scale = 0.005;
+
+            if (mouse_state.button == 1u) {
+                particle.velocity += dir_normalized * strength * force_scale;
+            } else if (mouse_state.button == 2u) {
+                particle.velocity -= dir_normalized * strength * force_scale;
+            }
+        }
+    }
+    
     // 空気抵抗によるエネルギーの自然減衰
     particle.velocity *= DAMPING_AIR;
 

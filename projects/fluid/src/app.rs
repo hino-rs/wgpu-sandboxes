@@ -18,7 +18,7 @@ use crate::renderer::Renderer;
 pub struct MouseStateUniform {
     pub pos_x: f32,
     pub pos_y: f32,
-    pub is_active: u32,
+    pub radius: f32,
     pub button: u32,
 }
 
@@ -54,7 +54,7 @@ pub struct MouseState {
     pub pos_x: f64,
     pub pos_y: f64,
     pub button: Button,
-    pub is_pressed: u32,
+    pub radius: f32,
 }
 
 impl ApplicationHandler for App {
@@ -84,7 +84,7 @@ impl ApplicationHandler for App {
             pos_x: 0.0,
             pos_y: 0.0,
             button: Button::None,
-            is_pressed: 0,
+            radius: 0.15,
         });
     }
 
@@ -121,7 +121,7 @@ impl ApplicationHandler for App {
                     let mouse_uniform = MouseStateUniform {
                         pos_x: mouse_state.pos_x as f32,
                         pos_y: mouse_state.pos_y as f32,
-                        is_active: mouse_state.is_pressed,
+                        radius: mouse_state.radius,
                         button: mouse_state.button.to_u32(),
                     };
                     gpu.queue.write_buffer(
@@ -170,16 +170,19 @@ impl ApplicationHandler for App {
 
             WindowEvent::MouseInput { state, button, .. } => {
                 if let Some(mouse_state) = &mut self.mouse_state {
-                    match button {
-                        MouseButton::Left => {
-                            mouse_state.button = Button::Left;
-                        } 
-                        MouseButton::Right => {
-                            mouse_state.button = Button::Right;
+                    if state.is_pressed() {
+                        match button {
+                            MouseButton::Left => {
+                                mouse_state.button = Button::Left;
+                            } 
+                            MouseButton::Right => {
+                                mouse_state.button = Button::Right;
+                            }
+                            _ => mouse_state.button = Button::None,
                         }
-                        _ => mouse_state.button = Button::None,
+                    } else {
+                        mouse_state.button = Button::None;
                     }
-                    mouse_state.is_pressed = if state.is_pressed() { 1 } else { 0 };
                 }
             },
 
