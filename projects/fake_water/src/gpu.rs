@@ -44,6 +44,7 @@ pub struct State {
     pub compute_bind_group_b: wgpu::BindGroup,
     
     // brush用
+    
     brush_buffer: wgpu::Buffer,
     pub brush_data: BrushUniform,
 }

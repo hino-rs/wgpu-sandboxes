@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+use winit::dpi::{PhysicalPosition, PhysicalSize};
+
 pub struct Rgb(pub [f32; 3]);
 pub struct Rgba(pub [f32; 4]);
 
@@ -37,4 +39,13 @@ impl Rgba {
             a: self.0[3] as f64,
         }
     }
+}
+
+pub fn to_ndc(size: &PhysicalSize<u32>, pos: &PhysicalPosition<f64>) -> [f64; 2] {
+    let width = size.width as f64;
+    let height = size.height as f64;
+    let nx = (pos.x / width) * 2.0 - 1.0;
+    let ny = 1.0 - (pos.y / height) * 2.0;
+
+    [nx, ny]
 }
