@@ -170,7 +170,7 @@ impl FluidSim {
         let mouse_data = MouseStateUniform {
             pos_x: 0.0,
             pos_y: 0.0,
-            is_active: 0,
+            radius: 0.0,
             button: 0,
         };
         
