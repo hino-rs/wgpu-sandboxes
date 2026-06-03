@@ -276,9 +276,9 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             let force_scale = 0.005;
 
             if (mouse_state.button == 1u) {
-                particle.velocity += dir_normalized * strength * force_scale;
+                particle.velocity -= dir_normalized * strength * force_scale * 0.5;
             } else if (mouse_state.button == 2u) {
-                particle.velocity -= dir_normalized * strength * force_scale;
+                particle.velocity += dir_normalized * strength * force_scale * 0.5;
             }
         }
     }
