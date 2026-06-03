@@ -1,7 +1,7 @@
 use crate::{
     fluid::{FluidSim, INITIAL_NUM_FLUID_PARTICLES, Particle},
     gpu::GpuContext,
-    types::Rgb,
+    common::Rgb,
 };
 use wgpu::{CommandEncoder, TextureView, util::DeviceExt};
 use winit::window::Window;
