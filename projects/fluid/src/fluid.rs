@@ -36,13 +36,13 @@ pub struct Particle {
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ParticlesParams {
-    pub max_speed: f32,         // 最高速度
-    pub min_speed: f32,         // 最低速度
     pub visual_range: f32,      // 他者への認識範囲
     pub protected_range: f32,   // 
     pub separation_weight: f32, //
     pub alignment_weight: f32,  //
     pub cohesion_weight: f32,   //
+    pub max_speed: f32,         // 最高速度
+    pub min_speed: f32,         // 最低速度
 
     _p: f32,
 }
@@ -303,13 +303,13 @@ impl Particle {
 impl Default for ParticlesParams {
     fn default() -> Self {
         Self {
-            max_speed: 0.02,
-            min_speed: 0.0,
             visual_range: 0.15,
             protected_range: 0.8,
             separation_weight: 3.0,
             alignment_weight: 1.5,
             cohesion_weight: 3.0,
+            max_speed: 0.02,
+            min_speed: 0.0,
             
             _p: 0.0,
         } 

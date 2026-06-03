@@ -55,7 +55,7 @@ struct ParticlesParams {
 @group(0) @binding(0) var<storage, read> particles_src: array<Particle>;
 @group(0) @binding(1) var<storage, read_write> particles_dst: array<Particle>;
 
-@group(0) @binding(2) var<uniform> patricles_params: ParticlesParams;
+@group(0) @binding(2) var<uniform> particles_params: ParticlesParams;
 @group(0) @binding(3) var<uniform> render_params: RenderParams;
 
 // =====================================================
@@ -114,7 +114,7 @@ fn vs_main(
     var out: VertexOutput;
 
     let num_particles = render_params.num_particles;
-    let size_scale = 0.01;
+    let size_scale = 0.02;
 
     let max_radius = max(1.0, 0.5 + render_params.glow_width);
     var pos = model.position.xy * size_scale * max_radius;
@@ -125,8 +125,8 @@ fn vs_main(
     out.clip_position = vec4f(final_pos, 0.0, 1.0);
 
     let speed = length(instance.velocity);
-    let min_s = patricles_params.min_speed;
-    let max_s = patricles_params.max_speed;
+    let min_s = particles_params.min_speed;
+    let max_s = particles_params.max_speed;
     let t = clamp((speed - min_s) / (max_s - min_s), 0.0, 1.0);
 
     let hue = (240.0 - t * 240.0) / 360.0;
@@ -163,19 +163,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 // =====================================================
 // Compute
 // =====================================================
-@compute @workgroup_size(128)
+@compute @workgroup_size(64)
 fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let index = global_id.x;
     let num_particles = arrayLength(&particles_src);
 
     if (index >= num_particles) { return; }
 
-    let p = patricles_params;
+    let p = particles_params;
     let H = p.visual_range;
     let LOOK_AHEAD = p.protected_range;
     let TARGET_DENSITY = p.cohesion_weight * 5.0;
     let PRESSURE_COEF = p.separation_weight * 0.0333;
-    let NEAR_PRESSURE_COEF = p.separation_weight * 0.333;
+    let NEAR_PRESSURE_COEF = p.separation_weight * 0.0333;
     let VISCOSITY_COEF = p.alignment_weight * 0.0667;
 
     var particle = particles_src[index];
