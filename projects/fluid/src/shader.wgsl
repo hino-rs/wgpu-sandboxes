@@ -3,11 +3,12 @@
 // =====================================================
 const PI: f32 = 3.14159265358979323846264338327950288;
 const DAMPING_AIR: f32 = 0.98;           // 空気抵抗：毎フレーム失われる速度の割合。これがないとエネルギーが溜まり続けて爆発します。
-const TIME_STEP: f32 = 0.1;              // タイムステップ：1コマごとの時間の進み幅。
+const TIME_STEP: f32 = 0.000001;              // タイムステップ：1コマごとの時間の進み幅。
 
-const GRAVITY: vec2f = vec2f(0.0, -0.0012); // 重力：下方向への自然な落下の強さ。
+const GRAVITY: vec2f = vec2f(0.0, -120.0); // 重力：下方向への自然な落下の強さ。
 const WALL_BOUNDS: f32 = 0.95;           // 壁の境界：-1.0〜1.0 の正方形の箱の内側を指定。
 const WALL_DAMPING: f32 = 0.4;          // 壁の反発係数：壁にぶつかった時にどれだけ勢いが吸収されるか（0.0〜1.0）。
+
 
 // =====================================================
 // Structures
@@ -198,9 +199,8 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
         if (dst < H) {
             // 通常の密度（体積維持用）
-            density += smoothing_kernel(dst, H);
-            // 近接密度（ダマ防止用・本来はSpikyベースですが現状の関数で代用して蓄積）
-            near_density += smoothing_kernel(dst, H);
+            density += spiky_kernel_derivative(dst, H);
+            near_density += spiky_kernel_derivative(dst, H);
         }
     }
 
@@ -254,7 +254,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // 力の合成と速度の更新
     // ==========================================
     // すべての力（通常圧力 + 近接圧力 + 粘性 + 重力）を現在の速度に加算
-    particle.velocity += pressure_force + viscosity_force + GRAVITY;
+    particle.velocity += (pressure_force + viscosity_force + GRAVITY) * TIME_STEP;
 
     // 空気抵抗によるエネルギーの自然減衰
     particle.velocity *= DAMPING_AIR;
@@ -269,7 +269,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // ==========================================
     // 位置の更新と壁での跳ね返り判定
     // ==========================================
-    particle.position += particle.velocity * TIME_STEP;
+    particle.position += particle.velocity; // * TIME_STEP
 
     // --- 左右の壁での反発 ---
     if (particle.position.x > WALL_BOUNDS) {
