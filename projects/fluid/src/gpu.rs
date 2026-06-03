@@ -15,7 +15,7 @@ impl GpuContext {
         pollster::block_on(Self::new(Arc::clone(window)))
     }
 
-    async fn new(window: Arc<Window>) -> Self {
+    pub async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {

@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use web_time::Instant;
 use wgpu::SurfaceTexture;
-use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
-use winit::dpi::PhysicalPosition;
 use winit::event::{MouseButton, WindowEvent};
 use winit::window::Window;
 
@@ -159,7 +157,7 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::CursorMoved { position, .. } => {
-                if let (Some(mouse_state), Some(window), Some(gpu)) = (&mut self.mouse_state, &self.window, &self.gpu) {
+                if let (Some(mouse_state), Some(window)) = (&mut self.mouse_state, &self.window) {
                     let ndc_pos = to_ndc(&window.inner_size(), &position);
                     mouse_state.pos_x = ndc_pos[0];
                     mouse_state.pos_y = ndc_pos[1];
@@ -244,5 +242,27 @@ impl App {
             | wgpu::CurrentSurfaceTexture::Validation => None,
         }
     }
+}
 
+impl App {
+    pub fn with_precreated(window: Arc<Window>, state: GpuContext) -> Self {
+        let fluid = FluidSim::init(&state);
+        let renderer = Renderer::init(&state, &window, &fluid.params_buffer);
+        let gui = GuiSystem::init(&state, &window);
+
+        Self {
+            window: Some(window),
+            gpu: Some(state),
+            renderer: Some(renderer),
+            gui: Some(gui),
+            fluid: Some(fluid),
+            last_update_time: Some(Instant::now()),
+            mouse_state: Some(MouseState {
+                pos_x: 0.0,
+                pos_y: 0.0,
+                button: Button::None,
+            }),
+            mouse_state_buffer: None,
+        }
+    }
 }
