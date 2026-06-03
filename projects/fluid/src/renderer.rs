@@ -210,13 +210,13 @@ impl Renderer {
         render_pass.draw(0..(32 * 3) as u32, 0..num_particles as u32);        
     }
 
-    pub fn update_render_params(&mut self, gpu: &GpuContext, fluid: &FluidSim, glow_width: f32) {
+    pub fn update_render_params(&mut self, gpu: &GpuContext, fluid: &FluidSim) {
         let aspect_ratio = gpu.config.width as f32 / gpu.config.height as f32;
         
         let render_params = RenderParams {
             num_particles: fluid.num_particles as u32,
             aspect_ratio,
-            glow_width,
+            glow_width: fluid.glow_width,
         };
         
         gpu.queue.write_buffer(

@@ -35,7 +35,7 @@ impl ApplicationHandler for App {
         let gpu = GpuContext::init(&window);
         let fluid = FluidSim::init(&gpu);
         let renderer = Renderer::init(&gpu, &window, &fluid.params_buffer);
-        let gui = GuiSystem::init(&gpu);
+        let gui = GuiSystem::init(&gpu, &window);
 
         self.window = Some(window);
         self.gpu = Some(gpu);
@@ -52,6 +52,12 @@ impl ApplicationHandler for App {
         event: winit::event::WindowEvent,
     )
     {
+        if let (Some(gui), Some(window)) = (&mut self.gui, &self.window) {
+            if gui.handle_event(window, &event) {
+                return;
+            }
+        }
+
         match event {
             WindowEvent::Resized(phisical_size) => {
                 if let Some(gpu) = &mut self.gpu {
@@ -117,7 +123,19 @@ impl ApplicationHandler for App {
 
 impl App {
     fn render(&mut self) {
-        let (Some(gpu), Some(fluid), Some(renderer)) = (&self.gpu, &self.fluid, &mut self.renderer) else {
+        let (
+            Some(gpu), 
+            Some(fluid), 
+            Some(renderer),
+            Some(gui),
+            Some(window)
+        ) = (
+            &self.gpu, 
+            &mut self.fluid, 
+            &mut self.renderer,
+            &mut self.gui,
+            &self.window,
+        ) else {
             panic!("SOME APP FIELD IS NONE");
         };
 
@@ -126,7 +144,8 @@ impl App {
         let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Render Encoder") });
 
         renderer.draw_scene(&mut encoder, &view, fluid.get_buffers(), fluid.num_particles);
-        renderer.update_render_params(&gpu, &fluid, 10.0);
+        gui.draw_ui(&gpu, &window, fluid, &mut encoder, &view);
+        renderer.update_render_params(&gpu, &fluid);
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
