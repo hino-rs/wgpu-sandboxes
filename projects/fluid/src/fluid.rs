@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 // =======================================================
 // 定義
 // =======================================================
-pub const INITIAL_NUM_FLUID_PARTICLES: usize = 500;
+pub const INITIAL_NUM_FLUID_PARTICLES: usize = 1000;
 
 // 流体シミュレーター
 pub struct FluidSim {
@@ -198,7 +198,7 @@ impl FluidSim {
             pause: false,
             delay: 0,
             next_step: false,
-            glow_width: 10.0,
+            glow_width: 0.1,
             num_particles: INITIAL_NUM_FLUID_PARTICLES,
             params: ParticlesParams::default(),
             params_buffer,
