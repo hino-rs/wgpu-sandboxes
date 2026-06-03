@@ -54,7 +54,6 @@ pub struct MouseState {
     pub pos_x: f64,
     pub pos_y: f64,
     pub button: Button,
-    pub radius: f32,
 }
 
 impl ApplicationHandler for App {
@@ -84,7 +83,6 @@ impl ApplicationHandler for App {
             pos_x: 0.0,
             pos_y: 0.0,
             button: Button::None,
-            radius: 0.15,
         });
     }
 
@@ -121,7 +119,7 @@ impl ApplicationHandler for App {
                     let mouse_uniform = MouseStateUniform {
                         pos_x: mouse_state.pos_x as f32,
                         pos_y: mouse_state.pos_y as f32,
-                        radius: mouse_state.radius,
+                        radius: fluid.cursor_radius,
                         button: mouse_state.button.to_u32(),
                     };
                     gpu.queue.write_buffer(
@@ -246,4 +244,5 @@ impl App {
             | wgpu::CurrentSurfaceTexture::Validation => None,
         }
     }
+
 }
