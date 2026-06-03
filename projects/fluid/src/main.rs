@@ -1,8 +1,8 @@
 mod app;
-mod renderer;
-mod gpu;
 mod fluid;
+mod gpu;
 mod gui;
+mod renderer;
 mod types;
 
 use app::App;

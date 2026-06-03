@@ -1,22 +1,22 @@
 use std::sync::Arc;
+use web_time::Instant;
 use wgpu::SurfaceTexture;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::window::Window;
-use web_time::Instant;
 
-use crate::gpu::GpuContext;
-use crate::renderer::Renderer;
 use crate::fluid::FluidSim;
+use crate::gpu::GpuContext;
 use crate::gui::GuiSystem;
+use crate::renderer::Renderer;
 
 #[derive(Default)]
 pub struct App {
-    window:     Option<Arc<Window>>,
-    gpu:        Option<GpuContext>,
-    renderer:   Option<Renderer>,
-    gui:        Option<GuiSystem>,
-    fluid:      Option<FluidSim>,
+    window: Option<Arc<Window>>,
+    gpu: Option<GpuContext>,
+    renderer: Option<Renderer>,
+    gui: Option<GuiSystem>,
+    fluid: Option<FluidSim>,
     last_update_time: Option<Instant>,
 }
 
@@ -50,12 +50,11 @@ impl ApplicationHandler for App {
         event_loop: &winit::event_loop::ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
-    )
-    {
-        if let (Some(gui), Some(window)) = (&mut self.gui, &self.window) {
-            if gui.handle_event(window, &event) {
-                return;
-            }
+    ) {
+        if let (Some(gui), Some(window)) = (&mut self.gui, &self.window)
+            && gui.handle_event(window, &event)
+        {
+            return;
         }
 
         match event {
@@ -70,37 +69,27 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let (
-                    Some(window),
-                    Some(gpu),
-                    Some(renderer),
-                    Some(gui),
-                    Some(fluid),
-                    Some(last_update_time),
-                ) = (
-                    &self.window,
-                    &self.gpu,
-                    &self.renderer,
-                    &self.gui,
-                    &mut self.fluid,
-                    &mut self.last_update_time,
-                ) {
+                if let (Some(gpu), Some(fluid), Some(last_update_time)) =
+                    (&self.gpu, &mut self.fluid, &mut self.last_update_time)
+                {
                     // 最新のパラメータをGPUのUnifrom Bufferに書き込む
-                    fluid.update_params(&gpu);
+                    fluid.update_params(gpu);
 
                     let now = Instant::now();
                     let elapsed = now.duration_since(*last_update_time);
 
-                    let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Render Encoder") });
+                    let mut encoder =
+                        gpu.device
+                            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                label: Some("Render Encoder"),
+                            });
 
-                    if !fluid.pause {
-                        if elapsed.as_millis() >= fluid.delay as u128 {
-                            fluid.update(&mut encoder, &gpu);
-                            *last_update_time = now;
-                        }
+                    if !fluid.pause && elapsed.as_millis() >= fluid.delay as u128 {
+                        fluid.update(&mut encoder);
+                        *last_update_time = now;
                     } else {
                         if fluid.next_step {
-                            fluid.update(&mut encoder, &gpu);
+                            fluid.update(&mut encoder);
                             fluid.next_step = false;
                             *last_update_time = now;
                         }
@@ -123,15 +112,9 @@ impl ApplicationHandler for App {
 
 impl App {
     fn render(&mut self) {
-        let (
-            Some(gpu), 
-            Some(fluid), 
-            Some(renderer),
-            Some(gui),
-            Some(window)
-        ) = (
-            &self.gpu, 
-            &mut self.fluid, 
+        let (Some(gpu), Some(fluid), Some(renderer), Some(gui), Some(window)) = (
+            &self.gpu,
+            &mut self.fluid,
             &mut self.renderer,
             &mut self.gui,
             &self.window,
@@ -139,13 +122,26 @@ impl App {
             panic!("SOME APP FIELD IS NONE");
         };
 
-        let Some(frame) = Self::get_surface_texture(&gpu) else { return; };
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Render Encoder") });
+        let Some(frame) = Self::get_surface_texture(gpu) else {
+            return;
+        };
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
-        renderer.draw_scene(&mut encoder, &view, fluid.get_buffers(), fluid.num_particles);
-        gui.draw_ui(&gpu, &window, fluid, &mut encoder, &view);
-        renderer.update_render_params(&gpu, &fluid);
+        renderer.draw_scene(
+            &mut encoder,
+            &view,
+            fluid.get_buffers(),
+            fluid.num_particles,
+        );
+        gui.draw_ui(gpu, window, fluid, &mut encoder, &view);
+        renderer.update_render_params(gpu, fluid);
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
@@ -164,10 +160,7 @@ impl App {
             }
             wgpu::CurrentSurfaceTexture::Timeout
             | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => {
-                None
-            }
-            _ => { None }
+            | wgpu::CurrentSurfaceTexture::Validation => None,
         }
     }
 }
