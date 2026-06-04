@@ -1,11 +1,7 @@
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
-
-const C: f32 = 0.5; // 抵抗
-const K: f32 = 4.0; // 硬さ
-const G: f32 = 1.0; // 重力
-const DT: f32 = 0.05; // 刻み
+use egui_wgpu::{Renderer as EguiRenderer, RendererOptions};
 
 const VERTICES: &[Vertex] = &[
     Vertex {
@@ -61,9 +57,9 @@ struct Uniform {
 
 pub struct State {
     surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     num_vertices: u32,
@@ -72,10 +68,15 @@ pub struct State {
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     time: f32,
+    pub egui_renderer: EguiRenderer,
 
-    y: f32,
-    v: f32,
-    a: f32,
+    pub y: f32,
+    pub v: f32,
+    pub a: f32,
+    pub c: f32, // 抵抗
+    pub k: f32, // 硬さ
+    pub g: f32, // 重力
+    pub dt: f32, // 刻み
 }
 
 impl State {
@@ -232,6 +233,12 @@ impl State {
         });
         let num_indices = INDICES.len() as u32;
 
+        let egui_renderer = EguiRenderer::new(
+            &device,
+            config.format,
+            RendererOptions::default(),
+        );
+
         Self {
             surface,
             device,
@@ -245,23 +252,34 @@ impl State {
             uniform_buffer,
             bind_group,
             time,
+            egui_renderer,
 
             y: 1.0,
             v: 0.0,
             a: 0.0,
+            c: 0.5,
+            k: 4.0,
+            g: 1.0,
+            dt: 0.05,
+        }
+    }
+
+    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.config.width = new_size.width;
+            self.config.height = new_size.height;
+            self.surface.configure(&self.device, &self.config);
         }
     }
 
     pub fn update(&mut self) {
         let m = 1.0;
 
-        self.a = ((-K * self.y) - (C * self.v)) / m;
-        self.v += self.a * DT;
-        self.y += self.v * DT;
+        self.a = ((-self.k * self.y) - (self.c * self.v)) / m;
+        self.v += self.a * self.dt;
+        self.y += self.v * self.dt;
 
-        self.y -= G * DT;
-
-        println!("{}", self.y);
+        self.y -= self.g * self.dt;
 
         let uniform_data = Uniform {
             time: self.y,
@@ -272,7 +290,7 @@ impl State {
             .write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform_data));
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
@@ -299,6 +317,14 @@ impl State {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
+        self.egui_renderer.update_buffers(
+            &self.device, 
+            &self.queue, 
+            &mut encoder, 
+            paint_jobs, 
+            screen_descriptor,
+        );
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -336,7 +362,34 @@ impl State {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
+        {
+            let mut egui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load, // 重ね
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None
+            }).forget_lifetime();
+
+            self.egui_renderer.render(&mut egui_pass, paint_jobs, screen_descriptor);
+        }
+
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
+    }
+
+    pub fn reset(&mut self) {
+            self.y = 1.0;
+            self.v = 0.0;
+            self.a = 0.0;
     }
 }
