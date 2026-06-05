@@ -97,9 +97,9 @@ impl ApplicationHandler for App {
 
                         ui.separator();
                         ui.heading("Parameters");
-                        ui.add(egui::Slider::new(&mut state.object.gy, 0.0..=10.0).text("重力"));
-                        ui.add(egui::Slider::new(&mut state.object.ky, 0.0..=10.0).text("バネの硬さ"));
-                        ui.add(egui::Slider::new(&mut state.object.cy, 0.0..=10.0).text("抵抗"));
+                        ui.add(egui::Slider::new(&mut state.object.g, 0.0..=10.0).text("重力"));
+                        ui.add(egui::Slider::new(&mut state.object.k, 0.0..=10.0).text("バネの硬さ"));
+                        ui.add(egui::Slider::new(&mut state.object.c, 0.0..=10.0).text("抵抗"));
                         
                         if ui.add(egui::Slider::new(&mut state.dt, 0.0001..=0.5).text("オイラー法 刻み")).changed() {
                             state.object.reset();
