@@ -5,57 +5,12 @@ use egui_wgpu::{Renderer as EguiRenderer, RendererOptions};
 
 use crate::core::Object;
 
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-0.1, -0.1, 0.0],
-        color: [0.2, 0.2, 0.2],
-    },
-    Vertex {
-        position: [0.1, -0.1, 0.0],
-        color: [0.2, 0.2, 0.2],
-    },
-    Vertex {
-        position: [0.1, 0.1, 0.0],
-        color: [0.2, 0.2, 0.2],
-    },
-    Vertex {
-        position: [-0.1, 0.1, 0.0],
-        color: [0.2, 0.2, 0.2],
-    },
-];
-
-const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    position: [f32; 3],
-    color: [f32; 3],
-}
-
-impl Vertex {
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-
-        const ATTRIBUTES: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
-            0 => Float32x3,
-            1 => Float32x3,
-        ];
-
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: ATTRIBUTES,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniform {
-    x: f32,
-    y: f32,
-    _padding: [f32; 2],
+pub struct Uniform {
+    pub x: f32,
+    pub y: f32,
+    pub _padding: [f32; 2],
 }
 
 pub struct State {
@@ -64,15 +19,9 @@ pub struct State {
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
-    uniform_buffer: wgpu::Buffer,
+    pub uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     pub egui_renderer: EguiRenderer,
-
-    pub object: Object,
-    pub dt: f32, // 刻み
 }
 
 impl State {
@@ -179,7 +128,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
+                buffers: &[],
                 compilation_options: Default::default(),
             },
 
@@ -214,19 +163,6 @@ impl State {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vetex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
-
         let egui_renderer = EguiRenderer::new(
             &device,
             config.format,
@@ -239,15 +175,9 @@ impl State {
             queue,
             config,
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
             uniform_buffer,
             bind_group,
             egui_renderer,
-
-            object: Object::default(),
-            dt: 0.05,
         }
     }
 
@@ -257,19 +187,6 @@ impl State {
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
         }
-    }
-
-    pub fn update(&mut self) {
-        self.object.calc(self.dt);
-
-        let uniform_data = Uniform {
-            x: self.object.x,
-            y: self.object.y,
-            _padding: [0.0, 0.0],
-        };
-
-        self.queue
-            .write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform_data));
     }
 
     pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
@@ -334,14 +251,8 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-
             render_pass.set_bind_group(0, &self.bind_group, &[]);
-
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            render_pass.draw(0..3, 0..1);
         }
 
         {

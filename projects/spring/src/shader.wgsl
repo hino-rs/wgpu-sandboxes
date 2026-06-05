@@ -1,8 +1,3 @@
-struct VertexInput {
-    @location(0) position: vec3f,
-    @location(1) color: vec3f,
-}
-
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) color: vec4f,
@@ -17,19 +12,13 @@ struct PosUniform {
 @group(0) @binding(0) var<uniform> pos: PosUniform;
 
 @vertex
-fn vs_main(model: VertexInput, @builtin(vertex_index) vertex_index: u32) -> VertexOutput {
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var out: VertexOutput;
-
-    // out.position = vec4f(model.position, 1.0);
-    // out.position.x += pos.x;
-    // out.position.y += pos.y;
 
     var x = f32(i32(vertex_index & 1u) << 2u) - 1.0;
     var y = f32(i32(vertex_index & 2u) << 1u) - 1.0;
     out.position = vec4f(x, y, 0.0, 1.0);
     out.uv = vec2f(x, y);
-
-    out.color = vec4f(model.color, 1.0);
 
     return out;
 }

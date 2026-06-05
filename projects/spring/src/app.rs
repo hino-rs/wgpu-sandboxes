@@ -4,7 +4,7 @@ use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::Act
 use egui::Context as EguiContext;
 use egui_winit::State as EguiState;
 
-use crate::state::State;
+use crate::{core::Object, state::{State, Uniform}};
 
 #[derive(Default)]
 pub struct App {
@@ -12,6 +12,9 @@ pub struct App {
     state: Option<State>,
     egui_ctx: EguiContext,
     egui_state: Option<EguiState>,
+
+    pub object: Object,
+    pub dt: f32,
 }
 
 impl ApplicationHandler for App {
@@ -50,6 +53,8 @@ impl ApplicationHandler for App {
         self.window = Some(window);
         self.egui_state = Some(egui_state);
         self.egui_ctx = egui_ctx;
+        self.object = Object::default();
+        self.dt = 0.05;
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -72,9 +77,9 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let (Some(state), Some(window), Some(egui_state)) = (&mut self.state, &self.window, &mut self.egui_state) {
-                    state.update();
+                self.update();
 
+                if let (Some(state), Some(window), Some(egui_state)) = (&mut self.state, &self.window, &mut self.egui_state) {
                     let raw_input = egui_state.take_egui_input(window);
                     self.egui_ctx.begin_pass(raw_input);
 
@@ -83,26 +88,26 @@ impl ApplicationHandler for App {
                         
                         ui.separator();
                         ui.heading("State");
-                        ui.label(format!("x: {:.2}, y: {:.2}", state.object.x, state.object.y));
-                        ui.label(format!("速度(x): {:.2}", state.object.ax.abs()));
-                        ui.label(format!("加速(x): {:.2}", state.object.vx.abs()));
-                        ui.label(format!("速度(y): {:.2}", state.object.ay.abs()));
-                        ui.label(format!("加速(y): {:.2}", state.object.vy.abs()));
+                        ui.label(format!("x: {:.2}, y: {:.2}", self.object.x, self.object.y));
+                        ui.label(format!("速度(x): {:.2}", self.object.ax.abs()));
+                        ui.label(format!("加速(x): {:.2}", self.object.vx.abs()));
+                        ui.label(format!("速度(y): {:.2}", self.object.ay.abs()));
+                        ui.label(format!("加速(y): {:.2}", self.object.vy.abs()));
 
                         ui.separator();
                         ui.heading("Control");
                         if ui.button("リセット").clicked() {
-                            state.object.reset();
+                            self.object.reset();
                         };
 
                         ui.separator();
                         ui.heading("Parameters");
-                        ui.add(egui::Slider::new(&mut state.object.g, 0.0..=10.0).text("重力"));
-                        ui.add(egui::Slider::new(&mut state.object.k, 0.0..=10.0).text("バネの硬さ"));
-                        ui.add(egui::Slider::new(&mut state.object.c, 0.0..=10.0).text("抵抗"));
+                        ui.add(egui::Slider::new(&mut self.object.g, 0.0..=10.0).text("重力"));
+                        ui.add(egui::Slider::new(&mut self.object.k, 0.0..=10.0).text("バネの硬さ"));
+                        ui.add(egui::Slider::new(&mut self.object.c, 0.0..=10.0).text("抵抗"));
                         
-                        if ui.add(egui::Slider::new(&mut state.dt, 0.0001..=0.5).text("オイラー法 刻み")).changed() {
-                            state.object.reset();
+                        if ui.add(egui::Slider::new(&mut self.dt, 0.0001..=0.5).text("オイラー法 刻み")).changed() {
+                            self.object.reset();
                         }
                     });
 
@@ -137,6 +142,23 @@ impl ApplicationHandler for App {
             }
 
             _ => {}
+        }
+    }
+}
+
+impl App {
+    fn update(&mut self) {
+        if let Some(gpu) = &self.state {
+            self.object.calc(self.dt);
+    
+            let uniform_data = Uniform {
+                x: self.object.x,
+                y: self.object.y,
+                _padding: [0.0, 0.0],
+            };
+    
+            gpu.queue
+                .write_buffer(&gpu.uniform_buffer, 0, bytemuck::bytes_of(&uniform_data));
         }
     }
 }
