@@ -10,7 +10,13 @@ use crate::core::Object;
 pub struct Uniform {
     pub x: f32,
     pub y: f32,
-    pub _padding: [f32; 2],
+    pub _p1: [f32; 2],
+    
+    pub spring_color: [f32; 3],
+    pub _p2: f32,
+
+    pub weight_color: [f32; 3],
+    pub _p3: f32,
 }
 
 pub struct State {
@@ -22,6 +28,8 @@ pub struct State {
     pub uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     pub egui_renderer: EguiRenderer,
+
+    pub bg_color: [f32; 3],
 }
 
 impl State {
@@ -82,7 +90,13 @@ impl State {
         let uniform_data = Uniform {
             x: 0.0,
             y: 0.0,
-            _padding: [0.0, 0.0],
+            _p1: [0.0, 0.0],
+
+            spring_color: [0.0, 0.0, 0.0],
+            _p2: 0.0,
+            
+            weight_color: [1.0, 1.0, 1.0],
+            _p3: 0.0,
         };
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -178,6 +192,8 @@ impl State {
             uniform_buffer,
             bind_group,
             egui_renderer,
+
+            bg_color: [0.1, 0.3, 1.0],
         }
     }
 
@@ -235,9 +251,9 @@ impl State {
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.2,
-                            g: 0.5,
-                            b: 1.0,
+                            r: self.bg_color[0] as f64,
+                            g: self.bg_color[1] as f64,
+                            b: self.bg_color[2] as f64,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

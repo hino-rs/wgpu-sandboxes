@@ -15,6 +15,13 @@ use crate::{
     state::{State, Uniform},
 };
 
+#[derive(Default, PartialEq)]
+enum Tab {
+    #[default]
+    Control,
+    Color,
+}
+
 #[derive(Default)]
 pub struct App {
     window: Option<Arc<Window>>,
@@ -29,6 +36,8 @@ pub struct App {
     pub c: f32, // 抵抗
     pub k: f32, // 硬さ
     pub g: f32, // 重力
+
+    current_tab: Tab,
 }
 
 impl ApplicationHandler for App {
@@ -78,6 +87,7 @@ impl ApplicationHandler for App {
         self.c = 0.5;
         self.k = 4.0;
         self.g = 1.0;
+        self.current_tab = Tab::Control;
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -173,33 +183,52 @@ impl ApplicationHandler for App {
 
                         ui.separator();
                         ui.heading("State");
-                        ui.label(format!("x: {:.2}, y: {:.2}", self.object.x, self.object.y));
-                        ui.label(format!("速度(x): {:.2}", self.object.ax.abs()));
-                        ui.label(format!("加速(x): {:.2}", self.object.vx.abs()));
-                        ui.label(format!("速度(y): {:.2}", self.object.ay.abs()));
-                        ui.label(format!("加速(y): {:.2}", self.object.vy.abs()));
+                        ui.label(format!("座標(x, y): ({:>6.2}, {:>6.2})", self.object.x, self.object.y));
+                        ui.label(format!("速度(x, y): ({:>6.2}, {:>6.2})", self.object.ax.abs(), self.object.ay.abs()));
+                        ui.label(format!("加速(x, y): ({:>6.2}, {:>6.2})", self.object.vx.abs(), self.object.vy.abs()));
+
+                        ui.horizontal(|ui| {
+                            ui.selectable_value(&mut self.current_tab, Tab::Control, "操作とパラメータ調整");
+                            ui.selectable_value(&mut self.current_tab, Tab::Color, "色");
+                        });
 
                         ui.separator();
-                        ui.heading("Control");
-                        if ui.button("リセット").clicked() {
-                            self.object.reset();
-                        };
 
-                        ui.separator();
-                        ui.heading("Parameters");
-                        ui.add(egui::Slider::new(&mut self.g, 0.0..=10.0).text("重力"));
-                        ui.add(egui::Slider::new(&mut self.k, 0.0..=10.0).text("バネの硬さ"));
-                        ui.add(egui::Slider::new(&mut self.c, 0.0..=10.0).text("抵抗"));
+                        match self.current_tab {
+                            Tab::Control => {
+                                ui.heading("Control");
+                                if ui.button("リセット").clicked() {
+                                    self.object.reset();
+                                };
 
-                        if ui
-                            .add(
-                                egui::Slider::new(&mut self.dt, 0.0001..=0.5)
-                                    .text("オイラー法 刻み"),
-                            )
-                            .changed()
-                        {
-                            self.object.reset();
+                                ui.separator();
+
+                                ui.heading("Parameters");
+                                ui.add(egui::Slider::new(&mut self.g, 0.0..=10.0).text("重力"));
+                                ui.add(egui::Slider::new(&mut self.k, 0.0..=10.0).text("バネの硬さ"));
+                                ui.add(egui::Slider::new(&mut self.c, 0.0..=10.0).text("抵抗"));
+
+                                if ui
+                                    .add(
+                                        egui::Slider::new(&mut self.dt, 0.0001..=0.5)
+                                            .text("オイラー法 刻み"),
+                                    )
+                                    .changed()
+                                {
+                                    self.object.reset();
+                                }
+                            }
+                            Tab::Color => {
+                                ui.heading("Color");
+                                ui.label("背景");
+                                ui.color_edit_button_rgb(&mut state.bg_color);
+                                ui.label("おもり");
+                                ui.color_edit_button_rgb(&mut self.object.weight_color);
+                                ui.label("紐");
+                                ui.color_edit_button_rgb(&mut self.object.spring_color);
+                            }
                         }
+
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
@@ -247,7 +276,13 @@ impl App {
             let uniform_data = Uniform {
                 x: self.object.x,
                 y: self.object.y,
-                _padding: [0.0, 0.0],
+                _p1: [0.0, 0.0],
+
+                spring_color: self.object.spring_color,
+                _p2: 0.0,
+                
+                weight_color: self.object.weight_color,
+                _p3: 0.0,
             };
 
             gpu.queue
@@ -293,6 +328,7 @@ impl App {
             c: 0.5,
             k: 4.0,
             g: 1.0,
+            current_tab: Tab::Control,
         }
     }
 }

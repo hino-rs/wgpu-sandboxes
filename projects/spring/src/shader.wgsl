@@ -4,12 +4,15 @@ struct VertexOutput {
     @location(1) uv: vec2f,
 }
 
-struct PosUniform {
+struct Uniform {
     x: f32,
     y: f32,
+    
+    spring_color: vec3f,
+    weight_color: vec3f,
 }
 
-@group(0) @binding(0) var<uniform> pos: PosUniform;
+@group(0) @binding(0) var<uniform> data: Uniform;
 
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
@@ -29,14 +32,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let p = in.uv;
     
     // オブジェクト（おもり）の中心座標B
-    let object_center = vec2f(pos.x, pos.y);
+    let object_center = vec2f(data.x, data.y);
     
     // ピクセルとオブジェクト中心Bとの距離を計算
     let dist_to_object = distance(p, object_center);
     
-    // 距離が0.1未満ならオブジェクトの範囲内として塗りつぶす
+    // 距離が指定範囲未満ならオブジェクトの範囲内として塗りつぶす
     if (dist_to_object < 0.08) {
-        return vec4f(1.0, 1.0, 1.0, 1.0);
+        return vec4f(data.weight_color, 1.0);
     }
 
     // 原点Aからオブジェクトの中心BまでとピクセルPとの最短距離を計算する
@@ -54,9 +57,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // pa - ba * h  =>  (P - A) - (B - A) * h  =>  P - (A + h * AB)
     let dist_to_line = length(pa - ba * h);
     
-    // 距離が線の太さ未満なら、線の範囲内として黒く塗りつぶす
+    // 距離が線の太さ未満なら、線の範囲内として塗りつぶす
     if (dist_to_line < 0.003) {
-        return vec4f(0.0, 0.0, 0.0, 1.0);
+        return vec4f(data.spring_color, 1.0);
     }
     
     // オブジェクトでも線でもない部分は描画を破棄

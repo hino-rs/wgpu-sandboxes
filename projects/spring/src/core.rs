@@ -9,6 +9,10 @@ pub struct Object {
     // 加速
     pub ax: f32,
     pub ay: f32,
+
+    // 色
+    pub spring_color: [f32; 3],
+    pub weight_color: [f32; 3],
 }
 
 impl Default for Object {
@@ -22,6 +26,9 @@ impl Default for Object {
 
             ax: 0.0,
             ay: 0.0,
+
+            spring_color: [0.0, 0.0, 0.0],
+            weight_color: [1.0, 1.0, 1.0],
         }
     }
 }
