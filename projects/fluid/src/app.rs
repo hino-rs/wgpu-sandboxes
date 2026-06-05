@@ -2,7 +2,7 @@ use std::sync::Arc;
 use web_time::Instant;
 use wgpu::SurfaceTexture;
 use winit::application::ApplicationHandler;
-use winit::event::{MouseButton, WindowEvent};
+use winit::event::{MouseButton, TouchPhase, WindowEvent};
 use winit::window::Window;
 
 use crate::common::to_ndc;
@@ -32,6 +32,7 @@ pub struct App {
     mouse_state_buffer: Option<wgpu::Buffer>,
 }
 
+#[derive(PartialEq)]
 pub enum Button {
     Left,
     Right,
@@ -153,6 +154,44 @@ impl ApplicationHandler for App {
                     }
                 } else {
                     panic!("SOME APP FIELD IS NOT INITIALIZED");
+                }
+            }
+
+            WindowEvent::Touch(touch) => {
+                let (Some(mouse_state), Some(gpu)) = (&mut self.mouse_state, &self.gpu) else {
+                    return;
+                };
+
+                let phase = touch.phase;
+
+                if phase == TouchPhase::Ended {
+                    mouse_state.button = Button::None;
+                    return;
+                }
+
+                let position = touch.location;
+
+                let window_size = &gpu.config;
+                let width = window_size.width;
+                let height = window_size.height;
+
+                let nx = (position.x / width as f64) * 2.0 - 1.0;
+                let ny = 1.0 - (position.y / height as f64) * 2.0;
+
+                mouse_state.pos_x = nx;
+                mouse_state.pos_y = ny;
+
+                if phase == TouchPhase::Started {
+                    mouse_state.button = Button::Left;
+                    mouse_state.pos_x = nx;
+                    mouse_state.pos_y = ny;
+                }
+
+                if phase == TouchPhase::Moved {
+                    if mouse_state.button != Button::None {
+                        mouse_state.pos_x = nx;
+                        mouse_state.pos_y = ny;
+                    }
                 }
             }
 
