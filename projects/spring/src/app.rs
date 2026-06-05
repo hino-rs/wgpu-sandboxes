@@ -5,7 +5,7 @@ use egui_winit::State as EguiState;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
-    event::{MouseButton, WindowEvent},
+    event::{MouseButton, TouchPhase, WindowEvent},
     event_loop::ActiveEventLoop,
     window::{Window, WindowId},
 };
@@ -92,6 +92,37 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(physical_size) => {
                 if let Some(state) = &mut self.state {
                     state.resize(physical_size);
+                }
+            }
+
+            WindowEvent::Touch(touch) => {
+                let phase = touch.phase;
+
+                if phase == TouchPhase::Ended {
+                    self.is_dragging = false;
+                    return;
+                }
+
+                let position = touch.location;
+
+                let window_size = &self.state.as_ref().unwrap().config;
+                let width = window_size.width;
+                let height = window_size.height;
+
+                let nx = ((position.x / width as f64) * 2.0 - 1.0) as f32;
+                let ny = (1.0 - (position.y / height as f64) * 2.0) as f32;
+
+                self.cursor_pos = PhysicalPosition::new(nx, ny);
+
+                if phase == TouchPhase::Started {
+                    self.is_dragging = true;
+                    self.object.update_pos(nx, ny);
+                }
+
+                if phase == TouchPhase::Moved {
+                    if self.is_dragging {
+                        self.object.update_pos(self.cursor_pos.x, self.cursor_pos.y);
+                    }
                 }
             }
 
