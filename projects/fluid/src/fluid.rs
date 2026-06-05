@@ -1,5 +1,5 @@
 use crate::{app::MouseStateUniform, gpu::GpuContext};
-use wgpu::util::DeviceExt;
+use wgpu::{CommandEncoder, util::DeviceExt};
 
 // =======================================================
 // 定義
@@ -17,6 +17,7 @@ pub struct FluidSim {
     pub params: ParticlesParams,
     pub params_buffer: wgpu::Buffer,
     pub mouse_buffer: wgpu::Buffer,
+    pub compute_bind_group_layout: wgpu::BindGroupLayout,
 
     // Compute
     pub compute_pipeline: wgpu::ComputePipeline,
@@ -238,6 +239,7 @@ impl FluidSim {
             params: ParticlesParams::default(),
             params_buffer,
             mouse_buffer,
+            compute_bind_group_layout,
 
             compute_pipeline,
             particles_buffers,
@@ -276,6 +278,81 @@ impl FluidSim {
     pub fn update_params(&mut self, gpu: &GpuContext) {
         gpu.queue
             .write_buffer(&self.params_buffer, 0, bytemuck::cast_slice(&[self.params]))
+    }
+
+    pub fn change_num_particles(&mut self, gpu: &GpuContext) {
+        let new_particles = Self::generate_particles(self.num_particles);
+
+        let buffer_a = gpu.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Particles Buffer A"),
+                contents: bytemuck::cast_slice(&new_particles),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+        let buffer_b = gpu.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Particles Buffer B"),
+                contents: bytemuck::cast_slice(&new_particles),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            }
+        );
+
+        let particles_buffers = ParticlesBuffers {
+            buffer_a,
+            buffer_b,
+            frame_count: 0,
+        };
+
+        let compute_bind_group_a = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Compute Bind Group A"),
+            layout: &self.compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: particles_buffers.buffer_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: particles_buffers.buffer_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.params_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.mouse_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let compute_bind_group_b = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Compute Bind Group B"),
+            layout: &self.compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: particles_buffers.buffer_b.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: particles_buffers.buffer_a.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.params_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: self.mouse_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        self.particles_buffers = particles_buffers;
+        self.compute_bind_group_a = compute_bind_group_a;
+        self.compute_bind_group_b = compute_bind_group_b;
     }
 
     pub fn update(&mut self, encoder: &mut wgpu::CommandEncoder) {

@@ -62,6 +62,10 @@ impl GuiSystem {
                 fluid.next_step = true;
             }
 
+            if ui.add(egui::Slider::new(&mut fluid.num_particles, 1..=20000).text("Num Particles")).changed() {
+                fluid.change_num_particles(gpu);
+            };
+
             ui.add(egui::Slider::new(&mut fluid.glow_width, 0.1..=100.0).text("Glow Width"));
 
             ui.add(
