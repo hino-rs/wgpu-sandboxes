@@ -9,6 +9,7 @@ struct VertexOutput {
 }
 
 struct PosUniform {
+    x: f32,
     y: f32,
 }
 
@@ -19,9 +20,11 @@ fn vs_main(model: VertexInput) -> VertexOutput {
     var out: VertexOutput;
 
     out.position = vec4<f32>(model.position, 1.0);
+    out.position.x += pos.x;
     out.position.y += pos.y;
 
     out.color = vec4<f32>(model.color, 1.0);
+    
     return out;
 }
 

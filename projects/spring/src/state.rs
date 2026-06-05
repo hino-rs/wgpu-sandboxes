@@ -3,6 +3,8 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 use egui_wgpu::{Renderer as EguiRenderer, RendererOptions};
 
+use crate::core::Object;
+
 const VERTICES: &[Vertex] = &[
     Vertex {
         position: [-0.1, -0.1, 0.0],
@@ -51,8 +53,9 @@ impl Vertex {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniform {
-    time: f32,
-    _padding: [f32; 3],
+    x: f32,
+    y: f32,
+    _padding: [f32; 2],
 }
 
 pub struct State {
@@ -62,20 +65,13 @@ pub struct State {
     pub config: wgpu::SurfaceConfiguration,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    time: f32,
     pub egui_renderer: EguiRenderer,
 
-    pub y: f32,
-    pub v: f32,
-    pub a: f32,
-    pub c: f32, // 抵抗
-    pub k: f32, // 硬さ
-    pub g: f32, // 重力
+    pub object: Object,
     pub dt: f32, // 刻み
 }
 
@@ -134,11 +130,10 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let translation = [0.0, 0.0];
-        let time = 0.0;
         let uniform_data = Uniform {
-            time,
-            _padding: [0.0, 0.0, 0.0],
+            x: 0.0,
+            y: 0.0,
+            _padding: [0.0, 0.0],
         };
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -224,7 +219,6 @@ impl State {
             contents: bytemuck::cast_slice(VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        let num_vertices = VERTICES.len() as u32;
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
@@ -246,20 +240,13 @@ impl State {
             config,
             render_pipeline,
             vertex_buffer,
-            num_vertices,
             index_buffer,
             num_indices,
             uniform_buffer,
             bind_group,
-            time,
             egui_renderer,
 
-            y: 1.0,
-            v: 0.0,
-            a: 0.0,
-            c: 0.5,
-            k: 4.0,
-            g: 1.0,
+            object: Object::default(),
             dt: 0.05,
         }
     }
@@ -273,17 +260,12 @@ impl State {
     }
 
     pub fn update(&mut self) {
-        let m = 1.0;
-
-        self.a = ((-self.k * self.y) - (self.c * self.v)) / m;
-        self.v += self.a * self.dt;
-        self.y += self.v * self.dt;
-
-        self.y -= self.g * self.dt;
+        self.object.calc(self.dt);
 
         let uniform_data = Uniform {
-            time: self.y,
-            _padding: [0.0, 0.0, 0.0],
+            x: self.object.x,
+            y: self.object.y,
+            _padding: [0.0, 0.0],
         };
 
         self.queue
@@ -385,11 +367,5 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
-    }
-
-    pub fn reset(&mut self) {
-            self.y = 1.0;
-            self.v = 0.0;
-            self.a = 0.0;
     }
 }

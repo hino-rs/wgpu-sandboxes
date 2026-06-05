@@ -1,5 +1,6 @@
 mod app;
 mod state;
+mod core;
 
 use app::App;
 use winit::event_loop::EventLoop;

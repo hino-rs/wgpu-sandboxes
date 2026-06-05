@@ -83,24 +83,26 @@ impl ApplicationHandler for App {
                         
                         ui.separator();
                         ui.heading("State");
-                        ui.label(format!("y: {:.2}", state.y));
-                        ui.label(format!("速度: {:.2}", state.a.abs()));
-                        ui.label(format!("加速: {:.2}", state.v.abs()));
+                        ui.label(format!("x: {:.2}, y: {:.2}", state.object.x, state.object.y));
+                        ui.label(format!("速度(x): {:.2}", state.object.ax.abs()));
+                        ui.label(format!("加速(x): {:.2}", state.object.vx.abs()));
+                        ui.label(format!("速度(y): {:.2}", state.object.ay.abs()));
+                        ui.label(format!("加速(y): {:.2}", state.object.vy.abs()));
 
                         ui.separator();
                         ui.heading("Control");
                         if ui.button("リセット").clicked() {
-                            state.reset();
+                            state.object.reset();
                         };
 
                         ui.separator();
                         ui.heading("Parameters");
-                        ui.add(egui::Slider::new(&mut state.g, 0.0..=10.0).text("重力"));
-                        ui.add(egui::Slider::new(&mut state.k, 0.0..=10.0).text("バネの硬さ"));
-                        ui.add(egui::Slider::new(&mut state.c, 0.0..=10.0).text("抵抗"));
+                        ui.add(egui::Slider::new(&mut state.object.gy, 0.0..=10.0).text("重力"));
+                        ui.add(egui::Slider::new(&mut state.object.ky, 0.0..=10.0).text("バネの硬さ"));
+                        ui.add(egui::Slider::new(&mut state.object.cy, 0.0..=10.0).text("抵抗"));
                         
                         if ui.add(egui::Slider::new(&mut state.dt, 0.0001..=0.5).text("オイラー法 刻み")).changed() {
-                            state.reset()
+                            state.object.reset();
                         }
                     });
 
