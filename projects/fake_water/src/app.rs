@@ -313,7 +313,3 @@ impl App {
         }
     }
 }
-
-impl App {
-
-}

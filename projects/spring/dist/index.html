@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>WGPU Boids Simulator</title>
+    <title>WGPU Spring Simulator</title>
     
 <script type="module">
-import init, * as bindings from '/boids-9694253df4e18438.js';
-const wasm = await init({ module_or_path: '/boids-9694253df4e18438_bg.wasm' });
+import init, * as bindings from '/spring-d93dcd1cd7d14a1d.js';
+const wasm = await init({ module_or_path: '/spring-d93dcd1cd7d14a1d_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -28,7 +28,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
             background-color: #000;
         }
     </style>
-<link rel="modulepreload" href="/boids-9694253df4e18438.js" crossorigin="anonymous" integrity="sha384-MhLggQLRAxRP/CCbGmzi3Z3VYWkL9d2nEAzoo1t+HsrLZaYDVPW4JWVkj1COUl22"><link rel="preload" href="/boids-9694253df4e18438_bg.wasm" crossorigin="anonymous" integrity="sha384-EzHZ+ZinhnpDdWk+ssjJFRHeELyKehu8cc+/LWattbE5qkKCJPEa7Fn6MQa22Q2e" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/spring-d93dcd1cd7d14a1d.js" crossorigin="anonymous" integrity="sha384-+hFm39/c3id3UqG408a54gNgEH1Jv0vrj2z3F3QtZFlohkmI11QhcPzl/p85yRD3"><link rel="preload" href="/spring-d93dcd1cd7d14a1d_bg.wasm" crossorigin="anonymous" integrity="sha384-2Ek/tfEHDwxMY1Xn6juJ9BDS1qkNbFnhmytNNs/s1lELXsCi4BzvZP191exceqX0" as="fetch" type="application/wasm"></head>
 
 <body>
 <script>"use strict";

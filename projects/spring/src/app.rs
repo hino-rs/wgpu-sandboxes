@@ -1,10 +1,19 @@
 use std::sync::Arc;
 
-use winit::{application::ApplicationHandler, dpi::PhysicalPosition, event::{MouseButton, WindowEvent}, event_loop::ActiveEventLoop, window::{Window, WindowId}};
 use egui::Context as EguiContext;
 use egui_winit::State as EguiState;
+use winit::{
+    application::ApplicationHandler,
+    dpi::PhysicalPosition,
+    event::{MouseButton, WindowEvent},
+    event_loop::ActiveEventLoop,
+    window::{Window, WindowId},
+};
 
-use crate::{core::Object, state::{State, Uniform}};
+use crate::{
+    core::Object,
+    state::{State, Uniform},
+};
 
 #[derive(Default)]
 pub struct App {
@@ -24,14 +33,18 @@ pub struct App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
+
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes().with_title("wgpu triangle"))
-                .unwrap()
+                .unwrap(),
         );
 
         let state = pollster::block_on(State::new(Arc::clone(&window)));
-        
+
         let egui_state = EguiState::new(
             self.egui_ctx.clone(),
             egui::ViewportId::ROOT,
@@ -49,11 +62,13 @@ impl ApplicationHandler for App {
                 include_bytes!("../../../common/NotoSansJP-VariableFont_wght.ttf").to_vec(),
             )),
         );
-        fonts.families.entry(egui::FontFamily::Proportional)
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
             .or_default()
             .insert(0, "font_ja".to_owned());
         egui_ctx.set_fonts(fonts);
-        
+
         self.state = Some(state);
         self.window = Some(window);
         self.egui_state = Some(egui_state);
@@ -86,7 +101,7 @@ impl ApplicationHandler for App {
                         return;
                     }
                     self.is_dragging = state.is_pressed();
-                    
+
                     if self.is_dragging {
                         self.object.update_pos(self.cursor_pos.x, self.cursor_pos.y);
                     }
@@ -95,7 +110,7 @@ impl ApplicationHandler for App {
 
             WindowEvent::CursorMoved { position, .. } => {
                 let window_size = &self.state.as_ref().unwrap().config;
-                
+
                 let width = window_size.width;
                 let height = window_size.height;
 
@@ -106,12 +121,8 @@ impl ApplicationHandler for App {
                     self.object.update_pos(nx, ny);
                 }
 
-                self.cursor_pos = PhysicalPosition {
-                    x: nx,
-                    y: ny,
-                };
+                self.cursor_pos = PhysicalPosition { x: nx, y: ny };
             }
-
 
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -120,13 +131,15 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 self.update();
 
-                if let (Some(state), Some(window), Some(egui_state)) = (&mut self.state, &self.window, &mut self.egui_state) {
+                if let (Some(state), Some(window), Some(egui_state)) =
+                    (&mut self.state, &self.window, &mut self.egui_state)
+                {
                     let raw_input = egui_state.take_egui_input(window);
                     self.egui_ctx.begin_pass(raw_input);
 
                     egui::Window::new("Config").show(&self.egui_ctx, |ui| {
                         ui.heading("Spring Simulator");
-                        
+
                         ui.separator();
                         ui.heading("State");
                         ui.label(format!("x: {:.2}, y: {:.2}", self.object.x, self.object.y));
@@ -146,8 +159,14 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(&mut self.g, 0.0..=10.0).text("重力"));
                         ui.add(egui::Slider::new(&mut self.k, 0.0..=10.0).text("バネの硬さ"));
                         ui.add(egui::Slider::new(&mut self.c, 0.0..=10.0).text("抵抗"));
-                        
-                        if ui.add(egui::Slider::new(&mut self.dt, 0.0001..=0.5).text("オイラー法 刻み")).changed() {
+
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut self.dt, 0.0001..=0.5)
+                                    .text("オイラー法 刻み"),
+                            )
+                            .changed()
+                        {
                             self.object.reset();
                         }
                     });
@@ -193,15 +212,56 @@ impl App {
             if !self.is_dragging {
                 self.object.calc(self.dt, self.g, self.k, self.c);
             }
-    
+
             let uniform_data = Uniform {
                 x: self.object.x,
                 y: self.object.y,
                 _padding: [0.0, 0.0],
             };
-    
+
             gpu.queue
                 .write_buffer(&gpu.uniform_buffer, 0, bytemuck::bytes_of(&uniform_data));
+        }
+    }
+}
+
+impl App {
+    pub fn with_precreated(window: Arc<Window>, state: State) -> Self {
+        let egui_ctx = EguiContext::default();
+        let egui_state = EguiState::new(
+            egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        );
+        let mut fonts = egui::FontDefinitions::default();
+        fonts.font_data.insert(
+            "font_ja".to_owned(),
+            Arc::from(egui::FontData::from_owned(
+                include_bytes!("../../../common/NotoSansJP-VariableFont_wght.ttf").to_vec(),
+            )),
+        );
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "font_ja".to_owned());
+        egui_ctx.set_fonts(fonts);
+
+        Self {
+            window: Some(window),
+            state: Some(state),
+            egui_state: Some(egui_state),
+            egui_ctx,
+            cursor_pos: PhysicalPosition::default(),
+            is_dragging: false,
+            object: Object::default(),
+            dt: 0.05,
+            c: 0.5,
+            k: 4.0,
+            g: 1.0,
         }
     }
 }

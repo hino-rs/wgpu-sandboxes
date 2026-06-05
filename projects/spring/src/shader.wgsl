@@ -61,4 +61,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     
     // オブジェクトでも線でもない部分は描画を破棄
     discard;
+    return vec4f(0.0);
 }
