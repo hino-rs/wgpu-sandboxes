@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop, window::{Window, WindowId}};
+use winit::{application::ApplicationHandler, dpi::PhysicalPosition, event::{MouseButton, WindowEvent}, event_loop::ActiveEventLoop, window::{Window, WindowId}};
 use egui::Context as EguiContext;
 use egui_winit::State as EguiState;
 
@@ -13,8 +13,13 @@ pub struct App {
     egui_ctx: EguiContext,
     egui_state: Option<EguiState>,
 
+    cursor_pos: PhysicalPosition<f32>,
+    is_dragging: bool,
     pub object: Object,
     pub dt: f32,
+    pub c: f32, // 抵抗
+    pub k: f32, // 硬さ
+    pub g: f32, // 重力
 }
 
 impl ApplicationHandler for App {
@@ -55,6 +60,9 @@ impl ApplicationHandler for App {
         self.egui_ctx = egui_ctx;
         self.object = Object::default();
         self.dt = 0.05;
+        self.c = 0.5;
+        self.k = 4.0;
+        self.g = 1.0;
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -71,6 +79,39 @@ impl ApplicationHandler for App {
                     state.resize(physical_size);
                 }
             }
+
+            WindowEvent::MouseInput { button, state, .. } => {
+                if button == MouseButton::Left {
+                    if state.is_pressed() && self.egui_ctx.egui_wants_pointer_input() {
+                        return;
+                    }
+                    self.is_dragging = state.is_pressed();
+                    
+                    if self.is_dragging {
+                        self.object.update_pos(self.cursor_pos.x, self.cursor_pos.y);
+                    }
+                }
+            }
+
+            WindowEvent::CursorMoved { position, .. } => {
+                let window_size = &self.state.as_ref().unwrap().config;
+                
+                let width = window_size.width;
+                let height = window_size.height;
+
+                let nx = ((position.x / width as f64) * 2.0 - 1.0) as f32;
+                let ny = (1.0 - (position.y / height as f64) * 2.0) as f32;
+
+                if self.is_dragging {
+                    self.object.update_pos(nx, ny);
+                }
+
+                self.cursor_pos = PhysicalPosition {
+                    x: nx,
+                    y: ny,
+                };
+            }
+
 
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -102,9 +143,9 @@ impl ApplicationHandler for App {
 
                         ui.separator();
                         ui.heading("Parameters");
-                        ui.add(egui::Slider::new(&mut self.object.g, 0.0..=10.0).text("重力"));
-                        ui.add(egui::Slider::new(&mut self.object.k, 0.0..=10.0).text("バネの硬さ"));
-                        ui.add(egui::Slider::new(&mut self.object.c, 0.0..=10.0).text("抵抗"));
+                        ui.add(egui::Slider::new(&mut self.g, 0.0..=10.0).text("重力"));
+                        ui.add(egui::Slider::new(&mut self.k, 0.0..=10.0).text("バネの硬さ"));
+                        ui.add(egui::Slider::new(&mut self.c, 0.0..=10.0).text("抵抗"));
                         
                         if ui.add(egui::Slider::new(&mut self.dt, 0.0001..=0.5).text("オイラー法 刻み")).changed() {
                             self.object.reset();
@@ -149,7 +190,9 @@ impl ApplicationHandler for App {
 impl App {
     fn update(&mut self) {
         if let Some(gpu) = &self.state {
-            self.object.calc(self.dt);
+            if !self.is_dragging {
+                self.object.calc(self.dt, self.g, self.k, self.c);
+            }
     
             let uniform_data = Uniform {
                 x: self.object.x,
