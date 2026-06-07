@@ -40,7 +40,7 @@ fn map(p: vec3f) -> vec2f {
     let plane_res = vec2f(plane_dist, 1.0); // ID=1.0
 
     let sphere_dist = sdf_sphere(p - vec3f(0.0, sin(uniforms.time * 2.0) * 0.5, 0.0), 1.0);
-    let sphere_res = vec2f(sphere_dist, 2.0); // ID=2.0abs
+    let sphere_res = vec2f(sphere_dist, 2.0); // ID=2.0
 
     return op_union(plane_res, sphere_res);
 }
