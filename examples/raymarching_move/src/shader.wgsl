@@ -37,11 +37,12 @@ fn smin(a: f32, b: f32, k: f32) -> f32 {
     return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// シーン全体のSDF (距離とマテリアルIDを返す)
+// シーン全体のSDF
 fn map(p: vec3f) -> vec2f {
     var q = p;
     q.x = (fract(q.x / 2.0 + 0.5) - 0.5) * 2.0;
     q.y = (fract(q.y / 2.0 + 0.5) - 0.5) * 2.0;
+    // q.z = (fract(q.z / 2.0 + 0.5) - 0.5) * 2.0;
 
     let sphere_dist = sdf_sphere(q, 0.4);
 
@@ -75,7 +76,7 @@ fn rotate_x(p: vec3f, a: f32) -> vec3f {
 fn rotate_y(p: vec3f, a: f32) -> vec3f {
     let c = cos(a);
     let s = sin(a);
-    return vec3f(p.x * c + p.x * s, p.y, -p.x * s + p.z * c);
+    return vec3f(p.x * c + p.z * s, p.y, -p.x * s + p.z * c);
 }
 
 @fragment
@@ -85,7 +86,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let p = (in.uv * 2.0 - 1.0) * vec2f(aspect, 1.0);
 
     // カメラの設定 (レイの開始位置roと方向rd)
-    let ro = vec3f(uniforms.camera_pos.xy, -3.0);
+    let ro = vec3f(uniforms.camera_pos.xyz);
     var ray_dir = vec3f(p, 1.0);
     ray_dir = rotate_x(ray_dir, uniforms.camera_rot.y); // 上下の回転を適用
     ray_dir = rotate_y(ray_dir, uniforms.camera_rot.x); // 左右の回転を適用
@@ -94,12 +95,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     // レイマーチングのメインループ
     var t = 0.0;
-    let t_max = 20.0;
+    let t_max = 100.0;
     var hit = false;
     var ip = vec3f(0.0);
     var hit_id = 0.0; // 衝突したオブジェクトのIDを記録する変数
 
-    for (var i = 0u; i < 128u; i++) {
+    for (var i = 0u; i < 256u; i++) {
         ip = ro + rd * t;
         let res = map(ip);
         let d = res.x;

@@ -1,7 +1,12 @@
-use std::{sync::Arc, time::Instant};
+use std::{collections::HashSet, sync::Arc, time::Instant};
 use wgpu::util::DeviceExt;
 use winit::{
-    application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, event_loop::{ActiveEventLoop, EventLoop}, window::{Window, WindowId}
+    application::ApplicationHandler,
+    dpi::PhysicalSize,
+    event::{ElementState, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
+    window::{Window, WindowId},
 };
 
 #[derive(Default)]
@@ -20,6 +25,9 @@ struct State {
     uniform_buffer: wgpu::Buffer,
     time: Instant,
     resolution: PhysicalSize<u32>,
+    camera_pos: [f32; 4],
+    camera_rot: [f32; 4],
+    pressed_keys: HashSet<KeyCode>,
 }
 
 #[repr(C)]
@@ -60,16 +68,72 @@ impl ApplicationHandler for App {
 
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.state {
-                    state.update();
+                    // state.update();
                     state.render();
                 }
 
-                if let Some(window) = &self.window {
-                    window.request_redraw();
-                }
+                if let Some(_window) = &self.window {}
             }
 
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
+                if let (PhysicalKey::Code(keycode), Some(state)) =
+                    (key_event.physical_key, &mut self.state)
+                {
+                    match key_event.state {
+                        ElementState::Pressed => match keycode {
+                            KeyCode::KeyW
+                            | KeyCode::KeyA
+                            | KeyCode::KeyS
+                            | KeyCode::KeyD
+                            | KeyCode::Space
+                            | KeyCode::ControlLeft
+                            | KeyCode::ControlRight
+                            | KeyCode::ArrowUp
+                            | KeyCode::ArrowLeft
+                            | KeyCode::ArrowDown
+                            | KeyCode::ArrowRight => {
+                                state.pressed_keys.insert(keycode);
+                            }
+                            _ => {}
+                        },
+                        ElementState::Released => {
+                            state.pressed_keys.remove(&keycode);
+                        }
+                    }
+                }
+
+                // let Some(state) = &mut self.state else {
+                //     return;
+                // };
+
+                // let is_pressed = key_event.state == ElementState::Pressed;
+
+                // if key_event.repeat {
+                //     return;
+                // }
+
+                // if let PhysicalKey::Code(keycode) = key_event.physical_key {
+                //     match (keycode, is_pressed) {
+                // (KeyCode::KeyW, true) => state.camera_pos[2] += 0.1,
+                // (KeyCode::KeyA, true) => state.camera_pos[0] -= 0.1,
+                // (KeyCode::KeyS, true) => state.camera_pos[2] -= 0.1,
+                // (KeyCode::KeyD, true) => state.camera_pos[0] += 0.1,
+                // (KeyCode::Space, true) => state.camera_pos[1] += 0.1,
+                // (KeyCode::ControlLeft | KeyCode::ControlRight, true) => state.camera_pos[1] -= 0.1,
+                // _ => {},
+                // }
+                // }
+            }
             _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let (Some(state), Some(window)) = (&mut self.state, &self.window) {
+            state.update();
+            window.request_redraw();
         }
     }
 }
@@ -146,36 +210,33 @@ impl State {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Uniform Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }
-            ]
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
         });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor { 
-            label: Some("Uniform Bind Group"), 
-            layout: &bind_group_layout, 
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buffer.as_entire_binding(),
-                }
-            ], 
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Uniform Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
         });
 
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
+            });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
@@ -229,15 +290,81 @@ impl State {
             bind_group,
             uniform_buffer,
             time,
-            resolution: PhysicalSize { width: size.width, height: size.height },
+            resolution: PhysicalSize {
+                width: size.width,
+                height: size.height,
+            },
+            camera_pos: Default::default(),
+            camera_rot: Default::default(),
+            pressed_keys: HashSet::new(),
         }
     }
 
-    fn update(&self) {
+    fn update(&mut self) {
         let time = Instant::now().duration_since(self.time).as_secs_f32();
+        let resolution = [
+            self.resolution.width as f32,
+            self.resolution.height as f32,
+            0.0,
+            0.0,
+        ];
+
+        let yaw = self.camera_rot[0];
+        let pitch = self.camera_rot[1];
+
+        // 視線方向（前）ベクトルを計算 (単位ベクトル)
+        let forward = [
+            pitch.cos() * yaw.sin(),
+            -pitch.sin(),
+            pitch.cos() * yaw.cos(),
+        ];
+        // 右方向ベクトルを計算 (単位ベクトル)
+        let right = [
+            yaw.cos(),
+            0.0,
+            -yaw.sin(),
+        ];
+
+        let speed = 0.1;
+
+        for key in &self.pressed_keys {
+            match key {
+                KeyCode::KeyW => {
+                    self.camera_pos[0] += forward[0] * speed;
+                    self.camera_pos[1] += forward[1] * speed;
+                    self.camera_pos[2] += forward[2] * speed;
+                }
+                KeyCode::KeyS => {
+                    self.camera_pos[0] -= forward[0] * speed;
+                    self.camera_pos[1] -= forward[1] * speed;
+                    self.camera_pos[2] -= forward[2] * speed;
+                }
+                KeyCode::KeyA => {
+                    self.camera_pos[0] -= right[0] * speed;
+                    self.camera_pos[1] -= right[1] * speed;
+                    self.camera_pos[2] -= right[2] * speed;
+                }
+                KeyCode::KeyD => {
+                    self.camera_pos[0] += right[0] * speed;
+                    self.camera_pos[1] += right[1] * speed;
+                    self.camera_pos[2] += right[2] * speed;
+                }
+                KeyCode::Space => self.camera_pos[1] += speed,
+                KeyCode::ControlLeft | KeyCode::ControlRight => self.camera_pos[1] -= speed,
+
+                KeyCode::ArrowUp => self.camera_rot[1] -= 0.01,
+                KeyCode::ArrowLeft => self.camera_rot[0] -= 0.01,
+                KeyCode::ArrowDown => self.camera_rot[1] += 0.01,
+                KeyCode::ArrowRight => self.camera_rot[0] += 0.01,
+                _ => {}
+            }
+        }
+
         let uniform_data = RaymarchUniforms {
             time,
-            resolution: [self.resolution.width as f32, self.resolution.height as f32, 0.0, 0.0],
+            resolution,
+            camera_pos: self.camera_pos,
+            camera_rot: self.camera_rot,
             ..Default::default()
         };
 
