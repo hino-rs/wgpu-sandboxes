@@ -1573,6 +1573,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
+name = "mandelbrot_set"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "egui_plot",
+ "env_logger",
+ "getrandom 0.3.4",
+ "getrandom 0.4.2",
+ "log",
+ "pollster",
+ "rand",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-logger",
+ "web-sys",
+ "web-time",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "matrix_transform2d"
 version = "0.1.0"
 dependencies = [

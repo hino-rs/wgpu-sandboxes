@@ -86,8 +86,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let p = (in.uv * 2.0 - 1.0) * vec2f(aspect, 1.0);
 
     // カメラの設定 (レイの開始位置roと方向rd)
-    let ro = vec3f(uniforms.camera_pos.xyz);
-    var ray_dir = vec3f(p, 1.0);
+    let ro = vec3f(uniforms.camera_pos.xyz); // レイの原点
+    var ray_dir = vec3f(p, 1.0);  // スクリーン座標からレイ方向を作成
     ray_dir = rotate_x(ray_dir, uniforms.camera_rot.y); // 上下の回転を適用
     ray_dir = rotate_y(ray_dir, uniforms.camera_rot.x); // 左右の回転を適用
     
