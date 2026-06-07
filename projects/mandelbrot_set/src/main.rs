@@ -325,32 +325,53 @@ impl State {
             -yaw.sin(),
         ];
 
-        let speed = 0.1;
+        let zoom_factor = (-self.camera_pos[2]).exp();
+        let pan_speed = 0.02 * zoom_factor;
+        let zoom_speed = 0.03;
 
         for key in &self.pressed_keys {
             match key {
                 KeyCode::KeyW => {
-                    self.camera_pos[0] += forward[0] * speed;
-                    self.camera_pos[1] += forward[1] * speed;
-                    self.camera_pos[2] += forward[2] * speed;
+                    self.camera_pos[2] += zoom_speed;
+                    // self.camera_pos[0] += forward[0] * speed;
+                    // self.camera_pos[1] += forward[1] * speed;
+                    // self.camera_pos[2] += forward[2] * speed;
                 }
                 KeyCode::KeyS => {
-                    self.camera_pos[0] -= forward[0] * speed;
-                    self.camera_pos[1] -= forward[1] * speed;
-                    self.camera_pos[2] -= forward[2] * speed;
+                    self.camera_pos[2] -= zoom_speed;
+                    // self.camera_pos[0] -= forward[0] * speed;
+                    // self.camera_pos[1] -= forward[1] * speed;
+                    // self.camera_pos[2] -= forward[2] * speed;
                 }
                 KeyCode::KeyA => {
-                    self.camera_pos[0] -= right[0] * speed;
-                    self.camera_pos[1] -= right[1] * speed;
-                    self.camera_pos[2] -= right[2] * speed;
+                    let yaw = self.camera_rot[0];
+                    self.camera_pos[0] -= yaw.cos() * pan_speed;
+                    self.camera_pos[1] -= yaw.sin() * pan_speed;
+                    // self.camera_pos[0] -= right[0] * speed;
+                    // self.camera_pos[1] -= right[1] * speed;
+                    // self.camera_pos[2] -= right[2] * speed;
                 }
                 KeyCode::KeyD => {
-                    self.camera_pos[0] += right[0] * speed;
-                    self.camera_pos[1] += right[1] * speed;
-                    self.camera_pos[2] += right[2] * speed;
+                    let yaw = self.camera_rot[0];
+                    self.camera_pos[0] += yaw.cos() * pan_speed;
+                    self.camera_pos[1] += yaw.sin() * pan_speed;
+                    // self.camera_pos[0] += right[0] * speed;
+                    // self.camera_pos[1] += right[1] * speed;
+                    // self.camera_pos[2] += right[2] * speed;
                 }
-                KeyCode::Space => self.camera_pos[1] += speed,
-                KeyCode::ControlLeft | KeyCode::ControlRight => self.camera_pos[1] -= speed,
+                KeyCode::Space => {
+                    let yaw = self.camera_rot[0];
+                    // 回転している場合、上方向は yaw + PI/2
+                    let angle = yaw + std::f32::consts::FRAC_PI_2;
+                    self.camera_pos[0] += angle.cos() * pan_speed;
+                    self.camera_pos[1] += angle.sin() * pan_speed;
+                },
+                KeyCode::ControlLeft | KeyCode::ControlRight => {
+                    let yaw = self.camera_rot[0];
+                    let angle = yaw + std::f32::consts::FRAC_PI_2;
+                    self.camera_pos[0] -= angle.cos() * pan_speed;
+                    self.camera_pos[1] -= angle.sin() * pan_speed;
+                }
 
                 KeyCode::ArrowUp => self.camera_rot[1] -= 0.01,
                 KeyCode::ArrowLeft => self.camera_rot[0] -= 0.01,
