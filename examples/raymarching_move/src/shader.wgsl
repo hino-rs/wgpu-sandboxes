@@ -1,3 +1,7 @@
+const T_MAX: f32 = 256.0;  // クリッピング距離(描画距離)
+const MAX_STEP: u32 = 256; // 最大ステップ(精度)
+const EPSILON: f32 = 0.001; // 衝突判定の閾値
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
     @location(0) uv: vec2f,
@@ -95,22 +99,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     // レイマーチングのメインループ
     var t = 0.0;
-    let t_max = 100.0;
     var hit = false;
     var ip = vec3f(0.0);
     var hit_id = 0.0; // 衝突したオブジェクトのIDを記録する変数
 
-    for (var i = 0u; i < 256u; i++) {
+    for (var i = 0u; i < MAX_STEP; i++) {
         ip = ro + rd * t;
         let res = map(ip);
         let d = res.x;
-        if (d < 0.01) {
+        if (d < EPSILON) {
             hit = true;
             hit_id = res.y;
             break;
         }
         t += d;
-        if (t > t_max) {
+        if (t > T_MAX) {
             break;
         }
     }
