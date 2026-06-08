@@ -1,7 +1,11 @@
 const T_MAX: f32 = 256.0;  // クリッピング距離(描画距離)
-const MAX_STEP: u32 = 256; // 最大ステップ(精度)
+const MAX_STEP: u32 = 1024; // 最大ステップ(精度)
 const EPSILON: f32 = 0.001; // 衝突判定の閾値
+const MASS: f32 = 16.0;
 const HOLE_CENTER: vec3f = vec3f(0.0);
+const HOLE_RADIUS: f32 = MASS * 2.0;
+const DISK_RADIUS: f32 = HOLE_RADIUS * 4.0;
+const DT: f32 = 0.1;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
@@ -36,6 +40,19 @@ fn sdf_sphere(p: vec3f, s: f32) -> f32 {
     return length(p) - s;
 }
 
+// 円盤
+fn sdf_disk(p: vec3f) -> f32 {
+    let radius = DISK_RADIUS;
+    let thickness = 0.001;
+
+    let q = vec2f(length(p.xz), p.y);
+    let d = abs(q) - vec2f(radius, thickness * 0.5);
+
+    let radius_dist = length(max(d, vec2f(0.0))) + min(max(d.x, d.y), 0.0);
+    
+    return radius_dist;
+}
+
 // 2つの値を滑らかに補完して最小値を返す
 fn smin(a: f32, b: f32, k: f32) -> f32 {
     let h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
@@ -43,19 +60,23 @@ fn smin(a: f32, b: f32, k: f32) -> f32 {
 }
 
 // シーン全体のSDF
-fn map(p: vec3f) -> f32 {
-    let sphere_dist = sdf_sphere(p, 10.0);
+fn map(p: vec3f) -> vec2f {
+    let sphere_dist = sdf_sphere(p, HOLE_RADIUS);
+    // let disk_dist = sdf_disk(p);
 
-    return sphere_dist;
+    // if (sphere_dist < disk_dist) {
+        return vec2f(sphere_dist, 1.0);
+    // }
+    // return vec2f(disk_dist, 2.0);
 }
 
 // 法線の計算
 fn get_normal(p: vec3f) -> vec3f {
     let e = vec2f(0.001, 0.0);
     return normalize(vec3f(
-        map(p + e.xyy) - map(p - e.xyy),
-        map(p + e.yxy) - map(p - e.yxy),
-        map(p + e.yyx) - map(p - e.yyx),
+        map(p + e.xyy).x - map(p - e.xyy).x,
+        map(p + e.yxy).x - map(p - e.yxy).x,
+        map(p + e.yyx).x - map(p - e.yyx).x,
     ));
 }
 
@@ -78,12 +99,13 @@ fn hash31(p: vec3<f32>) -> f32 {
     return fract((p3.x + p3.y) * p3.z);
 }
 
+
 // 星空の色を計算する関数
 // ray_dir: 正規化されたレイの方向ベクトル
 // time: またたき用
 fn get_star_field(ray_dir: vec3<f32>, time: f32) -> vec3<f32> {
     // 空間をグリッド（格子）状に分割する（数値が大きいほど星が小さく、高密度になる）
-    let scale = 120.0;
+    let scale = 320.0;
     let p = ray_dir * scale;
     let ip = floor(p); // 格子のインデックス（整数部）
     let fp = fract(p); // 格子内の相対座標（0.0〜1.0）
@@ -92,7 +114,7 @@ fn get_star_field(ray_dir: vec3<f32>, time: f32) -> vec3<f32> {
     let h = hash31(ip);
     
     // 閾値設定：上位5%の格子にだけ星を配置する
-    if (h > 0.95) {
+    if (h > 0.80) {
         // 星の配置が均一にならないよう、ハッシュ値を使ってセル内で位置をオフセット
         // （星が格子の境界で切れないよう、セルの中心付近に収まる範囲に制限）
         let offset = vec3<f32>(
@@ -122,6 +144,14 @@ fn get_star_field(ray_dir: vec3<f32>, time: f32) -> vec3<f32> {
     return vec3<f32>(0.0);
 }
 
+// fn snoise(v: vec3f) {
+
+// }
+
+// fn get_space_color(rd: vec3f) -> vec3f {
+
+// }
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let aspect = uniforms.resolution.x / uniforms.resolution.y;
@@ -134,24 +164,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     ray_dir = rotate_y(ray_dir, uniforms.camera_rot.x); // 左右の回転を適用
     
     var rd = normalize(ray_dir);
-    let dt = 0.01;
-
+    let dt = DT;
+    
     let hole_strength = 0.9 + 0.1 * sin(0.15 * uniforms.time);
-
+    
     // レイマーチングのメインループ
     var t = 0.0;
     var hit = false;
-    var ip = vec3f(0.0);
+    var ip = ro;
     var glow: f32 = 0.0; // 光をためる
-
+    var id = 0.0;
+    
     for (var i = 0u; i < MAX_STEP; i++) {
-        // 先端 = 始点 + 方向 * 進んだ距離
-        ip = ro + rd * t;
-
         let res = map(ip);
-
-        let d = res;
-        glow = glow + exp(-d * 30.0);
+        id = res.y;
+        let d = res.x;
+        
         if (d < 0.01) {
             hit = true;
             break;
@@ -159,12 +187,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
         var to_center = HOLE_CENTER - ip;
         let dist_to_center = length(to_center);
+
+        let r = length(ip.xz);
+        if (r > HOLE_RADIUS && r < DISK_RADIUS) {
+            let disk_density = exp(-abs(ip.y) * 4.0) * (1.0 / (r * 0.5));
+            glow += disk_density * dt;
+        }
+
         to_center = normalize(to_center);
         let bend = to_center;
-        rd += hole_strength * (1.0 / dist_to_center) * bend;
+
+        let bend_strength = 3.0 * MASS;
+        rd += bend_strength * (1.0 / (dist_to_center * dist_to_center * dist_to_center)) * bend * dt;
+        // rd += hole_strength * (1.0 / (dist_to_center*dist_to_center*dist_to_center)) * bend * dt;
         rd = normalize(rd);
         
-        t += d;
+        ip += rd * dt;
+        t += dt;
+
         if (t > T_MAX) {
             break;
         }
@@ -173,11 +213,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var color = vec3f(0.0); // 背景色
 
     if (hit) {
-        color = vec3f(0.0);
+        // if (id == 1.0) {
+            color = vec3f(0.0);
+        // } else {
+        //     // color = vec3f(glow, glow, 0.0);
+        // }
     } else {
         color = get_star_field(rd, uniforms.time);
         let bg_gradient = mix(vec3<f32>(0.005, 0.005, 0.02), vec3<f32>(0.0), rd.y * 0.5 + 0.5);
         color += bg_gradient;
+        color.x += glow;
+        color.y += glow;
+        // color.z += smoothstep(0.0, 1.0, glow);
+        color.z += step(1.0, glow);
     }
 
     return vec4f(color, 1.0);

@@ -308,7 +308,7 @@ impl State {
         let mut speed = 0.1;
 
         if self.pressed_keys.contains(&KeyCode::ShiftLeft) {
-            speed *= 2.0;
+            speed *= 5.0;
         }
 
         for key in &self.pressed_keys {
