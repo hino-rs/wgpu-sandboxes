@@ -50,7 +50,7 @@ fn sdf_sphere(p: vec3f, s: f32) -> f32 {
     return length(p) - s;
 }
 
-fn map(p: vec3f) -> f32 {
+fn a_map(p: vec3f) -> f32 {
     let time = uniforms.time;
 
     let s_max = mix(sin(time), cos(time), tan(time));
@@ -75,6 +75,19 @@ fn map(p: vec3f) -> f32 {
 
     return final_dist;
 }
+
+fn map(p: vec3f) -> f32 {
+    let x = select(
+        -1.0,
+        1.0,
+        uniforms.time % 2 < 0.1 && uniforms.time % 2 > -0.1
+    );
+    let sphere_offset = vec3f(x, 0.0, 0.0);
+    let sphere_dist = sdf_sphere(p - sphere_offset, 1.0);
+
+    return sphere_dist;
+}
+
 
 fn get_normal(p: vec3f) -> vec3f {
     let e = vec2f(0.001, 0.0);

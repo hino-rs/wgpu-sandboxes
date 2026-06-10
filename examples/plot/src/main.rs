@@ -68,7 +68,6 @@ impl ApplicationHandler for App {
 
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.state {
-                    // state.update();
                     state.render();
                 }
 
@@ -93,7 +92,9 @@ impl ApplicationHandler for App {
                             | KeyCode::ArrowUp
                             | KeyCode::ArrowLeft
                             | KeyCode::ArrowDown
-                            | KeyCode::ArrowRight => {
+                            | KeyCode::ArrowRight
+                            | KeyCode::ShiftLeft
+                            | KeyCode::ShiftRight => {
                                 state.pressed_keys.insert(keycode);
                             }
                             _ => {}
@@ -103,28 +104,6 @@ impl ApplicationHandler for App {
                         }
                     }
                 }
-
-                // let Some(state) = &mut self.state else {
-                //     return;
-                // };
-
-                // let is_pressed = key_event.state == ElementState::Pressed;
-
-                // if key_event.repeat {
-                //     return;
-                // }
-
-                // if let PhysicalKey::Code(keycode) = key_event.physical_key {
-                //     match (keycode, is_pressed) {
-                // (KeyCode::KeyW, true) => state.camera_pos[2] += 0.1,
-                // (KeyCode::KeyA, true) => state.camera_pos[0] -= 0.1,
-                // (KeyCode::KeyS, true) => state.camera_pos[2] -= 0.1,
-                // (KeyCode::KeyD, true) => state.camera_pos[0] += 0.1,
-                // (KeyCode::Space, true) => state.camera_pos[1] += 0.1,
-                // (KeyCode::ControlLeft | KeyCode::ControlRight, true) => state.camera_pos[1] -= 0.1,
-                // _ => {},
-                // }
-                // }
             }
             _ => {}
         }
@@ -294,7 +273,7 @@ impl State {
                 width: size.width,
                 height: size.height,
             },
-            camera_pos: Default::default(),
+            camera_pos: [0.0, 0.0, -10.0, 0.0],
             camera_rot: Default::default(),
             pressed_keys: HashSet::new(),
         }
@@ -312,66 +291,47 @@ impl State {
         let yaw = self.camera_rot[0];
         let pitch = self.camera_rot[1];
 
-        // 視線方向（前）ベクトルを計算 (単位ベクトル)
         let forward = [
             pitch.cos() * yaw.sin(),
             -pitch.sin(),
             pitch.cos() * yaw.cos(),
         ];
-        // 右方向ベクトルを計算 (単位ベクトル)
         let right = [
             yaw.cos(),
             0.0,
             -yaw.sin(),
         ];
 
-        let zoom_factor = (-self.camera_pos[2]).exp();
-        let pan_speed = 0.02 * zoom_factor;
-        let zoom_speed = 0.03;
+        let mut speed = 0.1;
+
+        if self.pressed_keys.contains(&KeyCode::ShiftLeft) {
+            speed *= 5.0;
+        }
 
         for key in &self.pressed_keys {
             match key {
                 KeyCode::KeyW => {
-                    self.camera_pos[2] += zoom_speed;
-                    // self.camera_pos[0] += forward[0] * speed;
-                    // self.camera_pos[1] += forward[1] * speed;
-                    // self.camera_pos[2] += forward[2] * speed;
+                    self.camera_pos[0] += forward[0] * speed;
+                    self.camera_pos[1] += forward[1] * speed;
+                    self.camera_pos[2] += forward[2] * speed;
                 }
                 KeyCode::KeyS => {
-                    self.camera_pos[2] -= zoom_speed;
-                    // self.camera_pos[0] -= forward[0] * speed;
-                    // self.camera_pos[1] -= forward[1] * speed;
-                    // self.camera_pos[2] -= forward[2] * speed;
+                    self.camera_pos[0] -= forward[0] * speed;
+                    self.camera_pos[1] -= forward[1] * speed;
+                    self.camera_pos[2] -= forward[2] * speed;
                 }
                 KeyCode::KeyA => {
-                    let yaw = self.camera_rot[0];
-                    self.camera_pos[0] -= yaw.cos() * pan_speed;
-                    self.camera_pos[1] -= yaw.sin() * pan_speed;
-                    // self.camera_pos[0] -= right[0] * speed;
-                    // self.camera_pos[1] -= right[1] * speed;
-                    // self.camera_pos[2] -= right[2] * speed;
+                    self.camera_pos[0] -= right[0] * speed;
+                    self.camera_pos[1] -= right[1] * speed;
+                    self.camera_pos[2] -= right[2] * speed;
                 }
                 KeyCode::KeyD => {
-                    let yaw = self.camera_rot[0];
-                    self.camera_pos[0] += yaw.cos() * pan_speed;
-                    self.camera_pos[1] += yaw.sin() * pan_speed;
-                    // self.camera_pos[0] += right[0] * speed;
-                    // self.camera_pos[1] += right[1] * speed;
-                    // self.camera_pos[2] += right[2] * speed;
+                    self.camera_pos[0] += right[0] * speed;
+                    self.camera_pos[1] += right[1] * speed;
+                    self.camera_pos[2] += right[2] * speed;
                 }
-                KeyCode::Space => {
-                    let yaw = self.camera_rot[0];
-                    // 回転している場合、上方向は yaw + PI/2
-                    let angle = yaw + std::f32::consts::FRAC_PI_2;
-                    self.camera_pos[0] += angle.cos() * pan_speed;
-                    self.camera_pos[1] += angle.sin() * pan_speed;
-                },
-                KeyCode::ControlLeft | KeyCode::ControlRight => {
-                    let yaw = self.camera_rot[0];
-                    let angle = yaw + std::f32::consts::FRAC_PI_2;
-                    self.camera_pos[0] -= angle.cos() * pan_speed;
-                    self.camera_pos[1] -= angle.sin() * pan_speed;
-                }
+                KeyCode::Space => self.camera_pos[1] += speed,
+                KeyCode::ControlLeft | KeyCode::ControlRight => self.camera_pos[1] -= speed,
 
                 KeyCode::ArrowUp => self.camera_rot[1] -= 0.01,
                 KeyCode::ArrowLeft => self.camera_rot[0] -= 0.01,

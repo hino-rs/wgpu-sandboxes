@@ -1,5 +1,3 @@
-const PI: f32 = 3.14159265359;
-
 const T_MAX: f32 = 512.0;  // クリッピング距離(描画距離)
 const MAX_STEP: u32 = 256; // 最大ステップ(精度)
 const EPSILON: f32 = 0.01; // 衝突判定の閾値
@@ -22,8 +20,6 @@ struct Uniforms {
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
-@group(0) @binding(1) var sky_texture: texture_2d<f32>;
-@group(0) @binding(2) var sky_sampler: sampler;
 
 @vertex
 fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
@@ -246,20 +242,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         //     // color = vec3f(glow, glow, 0.0);
         // }
     } else {
-        // color = get_star_field(rd, uniforms.time);
-
+        color = get_star_field(rd, uniforms.time);
         // let bg_gradient = mix(vec3<f32>(0.005, 0.005, 0.02), vec3<f32>(0.0), rd.y * 0.5 + 0.5);
         // color += bg_gradient;
         // color.x += glow;
         // color.y += glow;
         // color.z += smoothstep(0.0, 1.0, glow);
         // color.z += step(1.0, glow);
-
-        let u = 0.5 + atan2(rd.z, rd.x) / (2.0 * PI);
-        let v = 0.5 - asin(rd.y) / PI;
-        let sky_color = textureSample(sky_texture, sky_sampler, vec2f(u, v)).rgb;
-
-        color = sky_color;
     }
 
     return vec4f(color, 1.0);
