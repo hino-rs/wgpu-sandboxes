@@ -173,7 +173,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // レイマーチングのメインループ
     var t = 0.0;
     var hit = false;
-    var ip = ro;
+    let dither = hash21(in.uv * uniforms.time);
+    var dt = 0.5;
+    var ip = ro + rd * dither * dt;
     var glow: f32 = 0.0; // 光をためる
     var id = 0.0;
     
@@ -191,7 +193,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         //     max_dt = dist_to_center * 0.1;
         // }
         // let dt = clamp(dist_to_center * 0.02, 0.005, max_dt);
-        let dt = 0.5;
+        
 
 
         // let res = map(ip);
@@ -325,11 +327,11 @@ fn noise(st: vec2f) -> f32 {
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
-fn fbm(st: vec2f, octaves: i32) -> f32 {
+fn fbm(st: vec2f, octaves: u32) -> f32 {
     var value = 0.0;
     var amplitude = 0.5;
     var frequency = 1.0;
-    for (var i = 0u; i < 10; i++) {
+    for (var i = 0u; i < octaves; i++) {
         value += amplitude * noise(st * frequency);
         frequency *= 2.0;
         amplitude *= 0.5;
