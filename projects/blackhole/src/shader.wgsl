@@ -2,7 +2,7 @@ const PI: f32 = 3.14159265359;
 
 // const T_MAX: f32 = 512.0;  // クリッピング距離(描画距離)
 // const MAX_STEP: u32 = 128; // 最大ステップ(精度)
-const MASS: f32 = 1.0;
+const MASS: f32 = 3.0;
 const HOLE_CENTER: vec3f = vec3f(0.0);
 const HOLE_RADIUS: f32 = MASS * 2.0;
 const DISK_RADIUS: f32 = HOLE_RADIUS * 4.0;
@@ -174,7 +174,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var t = 0.0;
     var hit = false;
     let dither = hash21(in.uv * uniforms.time);
-    var dt = 0.5;
+    var dt = 0.7;
     var ip = ro + rd * dither * dt;
     var glow: f32 = 0.0; // 光をためる
     var id = 0.0;
@@ -224,7 +224,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         // to_center = normalize(to_center);
         
         let bend = normalize(to_center);
-        let bend_strength = 3.0 * MASS;
+        let bend_strength = 10.0 * MASS;
         // rd += bend_strength * (1.0 / (dist_to_center * dist_to_center * dist_to_center)) * bend * dt;
         // rd += hole_strength * (1.0 / (dist_to_center*dist_to_center*dist_to_center)) * bend * dt;
         let dist3 = pow(dist_to_center, 3);

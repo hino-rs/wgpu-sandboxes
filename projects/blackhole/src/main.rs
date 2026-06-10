@@ -358,7 +358,7 @@ impl State {
             camera_pos: [0.0, 0.0, -30.0, 0.0],
             camera_rot: Default::default(),
             pressed_keys: HashSet::new(),
-            params: [512.0, 128.0, 0., 0.], 
+            params: [1024.0, 256.0, 0., 0.], 
         }
     }
 
