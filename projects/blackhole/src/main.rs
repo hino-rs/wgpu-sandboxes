@@ -28,6 +28,7 @@ struct State {
     camera_pos: [f32; 4],
     camera_rot: [f32; 4],
     pressed_keys: HashSet<KeyCode>,
+    params: [f32; 4],
 }
 
 #[repr(C)]
@@ -38,6 +39,7 @@ struct RaymarchUniforms {
     resolution: [f32; 4],
     camera_pos: [f32; 4],
     camera_rot: [f32; 4],
+    params: [f32; 4],
 }
 
 impl ApplicationHandler for App {
@@ -353,9 +355,10 @@ impl State {
                 width: size.width,
                 height: size.height,
             },
-            camera_pos: [0.0, 0.0, -100.0, 0.0],
+            camera_pos: [0.0, 0.0, -30.0, 0.0],
             camera_rot: Default::default(),
             pressed_keys: HashSet::new(),
+            params: [512.0, 128.0, 0., 0.], 
         }
     }
 
@@ -428,6 +431,7 @@ impl State {
             resolution,
             camera_pos: self.camera_pos,
             camera_rot: self.camera_rot,
+            params: self.params,
             ..Default::default()
         };
 

@@ -1,13 +1,11 @@
 const PI: f32 = 3.14159265359;
 
-const T_MAX: f32 = 512.0;  // クリッピング距離(描画距離)
-const MAX_STEP: u32 = 256; // 最大ステップ(精度)
-const EPSILON: f32 = 0.01; // 衝突判定の閾値
-const MASS: f32 = 4.0;
+// const T_MAX: f32 = 512.0;  // クリッピング距離(描画距離)
+// const MAX_STEP: u32 = 128; // 最大ステップ(精度)
+const MASS: f32 = 1.0;
 const HOLE_CENTER: vec3f = vec3f(0.0);
 const HOLE_RADIUS: f32 = MASS * 2.0;
 const DISK_RADIUS: f32 = HOLE_RADIUS * 4.0;
-const DT: f32 = 0.01;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
@@ -19,6 +17,7 @@ struct Uniforms {
     resolution: vec4f,
     camera_pos: vec4f,
     camera_rot: vec4f,
+    params: vec4f, // T_MAX, MAX_STEP
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -178,7 +177,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var glow: f32 = 0.0; // 光をためる
     var id = 0.0;
     
-    for (var i = 0u; i < MAX_STEP; i++) {
+    for (var i = 0u; i < u32(uniforms.params.y); i++) {
         let to_center = HOLE_CENTER - ip;
         let dist_to_center = length(to_center);
 
@@ -187,11 +186,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             break;
         }
 
-        var max_dt = 0.2;
-        if (dist_to_center > DISK_RADIUS) {
-            max_dt = dist_to_center * 0.1;
-        }
-        let dt = clamp(dist_to_center * 0.02, 0.005, max_dt);
+        // var max_dt = 0.2;
+        // if (dist_to_center > DISK_RADIUS) {
+        //     max_dt = dist_to_center * 0.1;
+        // }
+        // let dt = clamp(dist_to_center * 0.02, 0.005, max_dt);
+        let dt = 0.5;
+
 
         // let res = map(ip);
         // id = res.y;
@@ -221,18 +222,49 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         // to_center = normalize(to_center);
         
         let bend = normalize(to_center);
-        let bend_strength = 5.0 * MASS;
+        let bend_strength = 3.0 * MASS;
         // rd += bend_strength * (1.0 / (dist_to_center * dist_to_center * dist_to_center)) * bend * dt;
         // rd += hole_strength * (1.0 / (dist_to_center*dist_to_center*dist_to_center)) * bend * dt;
         let dist3 = pow(dist_to_center, 3);
-        rd += bend_strength * (1.0 / dist3) * bend * dt;
         
+        let o_rd = rd;
+        rd += bend_strength * (1.0 / dist3) * bend * dt;
+
+        glow += distance(o_rd.z, rd.z) * 0.1;
+
+        let r = length(ip.xz);
+        
+        // --- 円盤ガス ---
+        let theta = atan2(ip.z, ip.x);
+        let r_mask = smoothstep(HOLE_RADIUS * 1.2, HOLE_RADIUS * 1.5, r) * smoothstep(DISK_RADIUS, DISK_RADIUS * 0.8, r);
+        let y_falloff = exp(-abs(ip.y) * 2.0);
+        let disk_mask = r_mask * y_falloff;
+        let spiral = theta - (uniforms.time * 2.0 + 10.0) / r;
+        let noise_coord = vec2f(r, spiral);
+        let n = fbm(noise_coord * 0.5, 4);
+        
+        let gas_density = disk_mask * n;
+
+        glow += gas_density * dt;
+
+        // --- ジェット ---
+        let jet_r = r;
+        let jet_y = abs(ip.y);
+        let jet_cone = smoothstep(jet_y * 0.2, 0.0, jet_r);
+        let jet_falloff = exp(-jet_y * 0.3);
+        let jet_mask = jet_cone * jet_falloff;
+        let jet_theta = theta;
+        let jet_coord = vec2f(jet_theta, ip.y - uniforms.time * 10.0);
+        let jet_n = fbm(jet_coord * 0.8, 3);
+
+        glow += jet_mask * n * dt;
+
         rd = normalize(rd);
         
         ip += rd * dt;
         t += dt;
 
-        if (t > T_MAX) {
+        if (t > uniforms.params.x) {
             break;
         }
     }
@@ -241,7 +273,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     if (hit) {
         // if (id == 1.0) {
-            color = vec3f(0.1);
+            color = vec3f(0.0);
         // } else {
         //     // color = vec3f(glow, glow, 0.0);
         // }
@@ -259,8 +291,48 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let v = 0.5 - asin(rd.y) / PI;
         let sky_color = textureSample(sky_texture, sky_sampler, vec2f(u, v)).rgb;
 
-        color = sky_color;
+        // let glow_color = vec3f(0.15 * glow, 0.15 * glow, 0.1 * glow);
+
+        // color = mix(sky_color, glow_color, 0.5);
+
+        
+
+        
+
+        // let noise_mixed_color = mix(mix(vec3(0.2, 0.1, 0.4), vec3(0.8, 0.7, 0.0), n), sky_color, 0.5);
+        // let glow_mixed_color = mix(noise_mixed_color, vec3f(glow), 0.5);
+
+        color = mix(sky_color, vec3f(glow), 0.5);
     }
 
     return vec4f(color, 1.0);
+}
+
+fn hash21(p: vec2f) -> f32 {
+    var p3 = fract(vec3f(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+fn noise(st: vec2f) -> f32 {
+    let i = vec2f(floor(st));
+    let f = vec2f(fract(st));
+    let a = hash21(i);
+    let b = hash21(i + vec2f(1.0, 0.0));
+    let c = hash21(i + vec2f(0.0, 1.0));
+    let d = hash21(i + vec2f(1.0, 1.0));
+    let u = smoothstep(vec2f(0.0), vec2f(1.0), f);
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+fn fbm(st: vec2f, octaves: i32) -> f32 {
+    var value = 0.0;
+    var amplitude = 0.5;
+    var frequency = 1.0;
+    for (var i = 0u; i < 10; i++) {
+        value += amplitude * noise(st * frequency);
+        frequency *= 2.0;
+        amplitude *= 0.5;
+    }
+    return value;
 }
