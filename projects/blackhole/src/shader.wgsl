@@ -1,7 +1,7 @@
 const T_MAX: f32 = 256.0;  // クリッピング距離(描画距離)
-const MAX_STEP: u32 = 1024; // 最大ステップ(精度)
+const MAX_STEP: u32 = 256; // 最大ステップ(精度)
 const EPSILON: f32 = 0.001; // 衝突判定の閾値
-const MASS: f32 = 16.0;
+const MASS: f32 = 2.0;
 const HOLE_CENTER: vec3f = vec3f(0.0);
 const HOLE_RADIUS: f32 = MASS * 2.0;
 const DISK_RADIUS: f32 = HOLE_RADIUS * 4.0;
@@ -105,7 +105,7 @@ fn hash31(p: vec3<f32>) -> f32 {
 // time: またたき用
 fn get_star_field(ray_dir: vec3<f32>, time: f32) -> vec3<f32> {
     // 空間をグリッド（格子）状に分割する（数値が大きいほど星が小さく、高密度になる）
-    let scale = 320.0;
+    let scale = 120.0;
     let p = ray_dir * scale;
     let ip = floor(p); // 格子のインデックス（整数部）
     let fp = fract(p); // 格子内の相対座標（0.0〜1.0）
@@ -113,8 +113,8 @@ fn get_star_field(ray_dir: vec3<f32>, time: f32) -> vec3<f32> {
     // 格子ごとに固有のハッシュ値を取得
     let h = hash31(ip);
     
-    // 閾値設定：上位5%の格子にだけ星を配置する
-    if (h > 0.80) {
+    // 閾値設定：上位n%の格子にだけ星を配置する
+    if (h > 0.9) {
         // 星の配置が均一にならないよう、ハッシュ値を使ってセル内で位置をオフセット
         // （星が格子の境界で切れないよう、セルの中心付近に収まる範囲に制限）
         let offset = vec3<f32>(
@@ -164,7 +164,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     ray_dir = rotate_y(ray_dir, uniforms.camera_rot.x); // 左右の回転を適用
     
     var rd = normalize(ray_dir);
-    let dt = DT;
+    // let dt = DT;
     
     let hole_strength = 0.9 + 0.1 * sin(0.15 * uniforms.time);
     
@@ -176,30 +176,45 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var id = 0.0;
     
     for (var i = 0u; i < MAX_STEP; i++) {
-        let res = map(ip);
-        id = res.y;
-        let d = res.x;
-        
-        if (d < 0.01) {
+        let to_center = HOLE_CENTER - ip;
+        let dist_to_center = length(to_center);
+
+        // ブラックホールに吸い込まれた
+        if (dist_to_center < HOLE_RADIUS + 0.01) {
             hit = true;
             break;
         }
 
-        var to_center = HOLE_CENTER - ip;
-        let dist_to_center = length(to_center);
+        // 中心から離れるほどステップサイズを大きくし、遠方なら早期離脱
+        var max_dt = 0.2;
+        if (dist_to_center > DISK_RADIUS) {
+            max_dt = dist_to_center * 0.1; // 遠くでは大股で歩く
+        }
+        let dt = clamp(dist_to_center * 0.02, 0.005, max_dt);
 
+        // ディスクの描画処理
         let r = length(ip.xz);
         if (r > HOLE_RADIUS && r < DISK_RADIUS) {
             let disk_density = exp(-abs(ip.y) * 4.0) * (1.0 / (r * 0.5));
-            glow += disk_density * dt;
+            let gas_vel = normalize(vec3f(-ip.z, 0.0, ip.x));
+            let doppler = dot(gas_vel, -rd);
+            
+            let d_flop = max(0.0, 1.0 + doppler * 0.7);
+            let doppler_factor = d_flop * d_flop * d_flop * d_flop;
+
+            glow += disk_density * (1.0 + doppler_factor) * dt;
         }
 
-        to_center = normalize(to_center);
-        let bend = to_center;
-
+        // 重力による光線の曲げ
+        let bend = normalize(to_center);
         let bend_strength = 3.0 * MASS;
-        rd += bend_strength * (1.0 / (dist_to_center * dist_to_center * dist_to_center)) * bend * dt;
-        // rd += hole_strength * (1.0 / (dist_to_center*dist_to_center*dist_to_center)) * bend * dt;
+
+        let dist3 = dist_to_center * dist_to_center * dist_to_center;
+        
+        // 物理的
+        rd += bend_strength * (1.0 / dist3) * bend * dt;
+        
+        // rd += hole_strength * (1.0 / dist_to_center) * bend;
         rd = normalize(rd);
         
         ip += rd * dt;
@@ -210,7 +225,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         }
     }
 
-    var color = vec3f(0.0); // 背景色
+    var color = vec3f(0.0);
 
     if (hit) {
         // if (id == 1.0) {
@@ -219,14 +234,150 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         //     // color = vec3f(glow, glow, 0.0);
         // }
     } else {
-        color = get_star_field(rd, uniforms.time);
-        let bg_gradient = mix(vec3<f32>(0.005, 0.005, 0.02), vec3<f32>(0.0), rd.y * 0.5 + 0.5);
-        color += bg_gradient;
-        color.x += glow;
-        color.y += glow;
-        // color.z += smoothstep(0.0, 1.0, glow);
-        color.z += step(1.0, glow);
+        // color = get_star_field(rd, uniforms.time);
+        // let bg_gradient = mix(vec3<f32>(0.005, 0.005, 0.02), vec3<f32>(0.0), rd.y * 0.5 + 0.5);
+        // color += bg_gradient;
+        // color.x += glow;
+        // color.y += glow;
+        // // color.z += smoothstep(0.0, 1.0, glow);
+        // // color.z += step(1.0, glow);
+        // if (glow >= 0.2) {
+        //     color.z += glow/2.0;
+        // }
+        color = get_space_color(rd);
     }
 
     return vec4f(color, 1.0);
+}
+
+fn get_space_color(rd: vec3f) -> vec3f {
+    var color = vec3f(0.0);
+
+    // 星の描画：高周波のノイズを鋭くクランプし、powで輝点にする
+    var n = max(0.0, snoise(rd * 80.0));
+    n = pow(n, 80.0) * 50.0;
+    color += vec3f(n);
+
+    // 星雲のようなうねり：ノイズ値を [0.0, 1.0] にマッピングして負の色を防ぐ
+    n = snoise(rd * 1.0) * 0.5 + 0.5;
+    color += 0.15 * vec3f(n, 0.0, n);
+    
+    n = snoise(rd * 2.0) * 0.5 + 0.5;
+    color += 0.1 * vec3f(0.0, n, 0.0);
+    
+    n = max(0.0, snoise(rd * 4.0));
+    n = pow(n, 2.0);
+    color += 0.05 * vec3f(0.0, n, n);
+
+    return color;
+}
+
+fn mod289_3(x: vec3f) -> vec3f {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+
+fn mod289_4(x: vec4f) -> vec4f {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+
+fn permute(x: vec4f) -> vec4f {
+    return mod289_4(((x * 34.0) + 1.0) * x);
+}
+
+fn taylorInvSqrt(r: vec4f) -> vec4f {
+    return 1.79284291400159 - 0.85373472095314 * r;
+}
+
+fn snoise(v: vec3f) -> f32 {
+    const C = vec2f(1.0 / 6.0, 1.0 / 3.0);
+    const D = vec4f(0.0, 0.5, 1.0, 2.0);
+
+    // First corner
+    let i = floor(v + dot(v, C.yyy));
+    let x0 = v - i + dot(i, C.xxx);
+
+    // Other corners
+    let g = step(x0.yzx, x0.xyz);
+    let l = 1.0 - g;
+    let i1 = min(g.xyz, l.zxy);
+    let i2 = max(g.xyz, l.zxy);
+
+    let x1 = x0 - i1 + C.xxx;
+    let x2 = x0 - i2 + C.yyy;
+    let x3 = x0 - D.yyy;
+
+    // Permutations
+    let i_mod = mod289_3(i);
+    let p = permute(permute(permute(
+                i_mod.z + vec4f(0.0, i1.z, i2.z, 1.0)
+            ) + i_mod.y + vec4f(0.0, i1.y, i2.y, 1.0)
+        ) + i_mod.x + vec4f(0.0, i1.x, i2.x, 1.0));
+
+    // Gradients: 7x7 points over a square, mapped onto an octahedron.
+    const n_ = 0.142857142857; // 1.0/7.0
+    let ns = n_ * D.wyz - D.xzx;
+
+    let j = p - 49.0 * floor(p * ns.z);
+
+    let x_ = floor(j * ns.z);
+    let y_ = floor(j - 7.0 * x_);
+
+    let x = x_ * ns.x + ns.yyyy;
+    let y = y_ * ns.x + ns.yyyy;
+    let h = 1.0 - abs(x) - abs(y);
+
+    let b0 = vec4f(x.xy, y.xy);
+    let b1 = vec4f(x.zw, y.zw);
+
+    let s0 = floor(b0) * 2.0 + 1.0;
+    let s1 = floor(b1) * 2.0 + 1.0;
+    let sh = -step(h, vec4f(0.0));
+
+    let a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+    let a1 = b1.xzyw + s1.xzyw * sh.zzww;
+
+    var p0 = vec3f(a0.xy, h.x);
+    var p1 = vec3f(a0.zw, h.y);
+    var p2 = vec3f(a1.xy, h.z);
+    var p3 = vec3f(a1.zw, h.w);
+
+    // Normalise gradients
+    let norm = taylorInvSqrt(vec4f(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+    p0 = p0 * norm.x;
+    p1 = p1 * norm.y;
+    p2 = p2 * norm.z;
+    p3 = p3 * norm.w;
+
+    // Mix final noise value
+    var m = max(0.6 - vec4f(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), vec4f(0.0));
+    m = m * m;
+    
+    var n = 42.0 * dot(m * m, vec4f(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+
+    n = 0.5 * (n + 1.0);
+
+    return n;
+}
+
+// 5層のノイズを重ねて密度の高いディテールを作る
+fn fbm3D(p_in: vec3f) -> f32 {
+    var value: f32 = 0.0;
+    var amplitude: f32 = 0.5;
+    var frequency: f32 = 1.0;
+    var p = p_in;
+    
+    // WGSLのループでは、インクリメントは `i += 1` と書きます（i++は不可）
+    for (var i: i32 = 0; i < 5; i += 1) {
+        // ノイズの寄与を加算
+        let n = snoise(p * frequency);
+        
+        // [-1, 1] の結果を [0, 1] にマッピングして重ねる場合
+        value += amplitude * (n * 0.5 + 0.5);
+        
+        // 次のレイヤーのためのセットアップ
+        p += vec3f(10.0, 10.0, 10.0); // 周期パターンの重なり（アーティファクト）を防ぐオフセット
+        frequency *= 2.0;
+        amplitude *= 0.5;
+    }
+    return value;
 }
