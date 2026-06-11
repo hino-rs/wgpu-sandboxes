@@ -4,8 +4,6 @@ const MASS: f32 = 3.0;
 const HOLE_CENTER: vec3f = vec3f(0.0);
 const HOLE_RADIUS: f32 = MASS * 2.0;
 const DISK_RADIUS: f32 = HOLE_RADIUS * 8.0;
-const MIN_DT: f32 = 0.01;
-const MAX_DT: f32 = 0.5;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
@@ -14,13 +12,16 @@ struct VertexOutput {
 
 struct Uniforms {
     time: f32,
+    min_dt: f32,
+    max_dt: f32,
+    _p: f32,
     resolution: vec4f,
     camera_pos: vec4f,
     camera_rot: vec4f,
     t_max: f32,
     max_steps: u32,
     bend_strength_coef: f32,
-    _p: f32
+    light_up_coef: f32,
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -135,12 +136,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let to_center = HOLE_CENTER - ip;
         dist_to_center = length(to_center);
 
-        // レイが十分ブラックホールの遠方ならスキップ
+        // レイが十分ブラックホールの遠方ならマーチングスキップ
         if (dist_to_center > DISK_RADIUS * 1.5 && dot(rd, to_center) < 0.0) {
             break;
         }
 
-        let dt = clamp(dist_to_center * 0.1, MIN_DT, MAX_DT);
+        let dt = clamp(dist_to_center * 0.1, uniforms.min_dt, uniforms.max_dt);
 
         if (dist_to_center < HOLE_RADIUS + 0.01) {
             hit = true;
@@ -154,7 +155,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let o_rd = rd;
         rd += bend_strength * (1.0 / dist3) * bend * dt;
 
-        glow += distance(o_rd.z, rd.z) * 0.3; // 少し辺りを照らす
+        glow += distance(o_rd.z, rd.z) * uniforms.light_up_coef; // 少し辺りを照らす
 
         let r = length(ip.xz);
         
@@ -194,15 +195,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
 
     var color = vec3f(0.0);
+    let glows = vec3f(0.7 * glow, 0.7 * glow, 0.55 * glow);
 
     if (hit) {
-        color = vec3f(0.0);
+        color = vec3f(0.0 + glows*vec3f(0.5));
     } else {
         let u = 0.5 + atan2(rd.z, rd.x) / (2.0 * PI);
         let v = 0.5 - asin(rd.y) / PI;
         let sky_color = textureSampleLevel(sky_texture, sky_sampler, vec2f(u, v), 0.0);
-        let glow = vec3f(0.7 * glow, 0.7 * glow, 0.55 * glow);
-        color = mix(sky_color.rgb, glow, 0.5);
+        
+        color = mix(sky_color.rgb, glows, 0.5);
     }
 
     return vec4f(color/**vec3f(0.01)*/, 1.0);

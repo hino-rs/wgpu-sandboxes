@@ -44,7 +44,9 @@ struct State {
 #[derive(Default, Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
     time: f32,
-    _pad: [f32; 3],
+    max_dt: f32,
+    min_dt: f32,
+    _pad: f32,
     resolution: [f32; 4],
     camera_pos: [f32; 4],
     camera_rot: [f32; 4],
@@ -52,7 +54,7 @@ struct Uniforms {
     t_max: f32,
     max_step: u32,
     bend_strength_coef: f32,
-    _p: f32,
+    light_up_coef: f32,
 }
 
 impl ApplicationHandler for App {
@@ -110,6 +112,12 @@ impl ApplicationHandler for App {
                     self.egui_ctx.begin_pass(raw_input);
 
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
+                        ui.label("Max dt");
+                        ui.add(egui::Slider::new(&mut state.uniforms.max_dt, 0.01..=5.0));
+                        
+                        ui.label("Min dt");
+                        ui.add(egui::Slider::new(&mut state.uniforms.min_dt, 0.0001..=3.0));
+                        
                         ui.label("Max travel distance of ray");
                         ui.add(egui::Slider::new(&mut state.uniforms.t_max, 512.0..=2048.0));
                         
@@ -118,6 +126,9 @@ impl ApplicationHandler for App {
                         
                         ui.label("Bend strength coef");
                         ui.add(egui::Slider::new(&mut state.uniforms.bend_strength_coef, 0.0..=100.0));
+                        
+                        ui.label("Light up coef");
+                        ui.add(egui::Slider::new(&mut state.uniforms.light_up_coef, 0.0..=5.0));
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
@@ -431,7 +442,9 @@ impl State {
             time,
             uniforms: Uniforms {
                 time: 0.0,
-                _pad: [0.0, 0.0, 0.0],
+                min_dt: 0.01,
+                max_dt: 0.5,
+                _pad: 0.0,
                 resolution: [
                     size.width as f32,
                     size.height as f32,
@@ -443,7 +456,7 @@ impl State {
                 t_max: 1024.0, 
                 max_step: 256, 
                 bend_strength_coef: 10.0, 
-                _p: 0.0,
+                light_up_coef: 0.3,
             },
             pressed_keys: HashSet::new(),
             egui_renderer,
