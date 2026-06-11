@@ -45,6 +45,10 @@ jobs:
       - name: Prepare Deployment Directory
         run: |
           mkdir -p deploy_out
+          cd deploy_out
+          mkdir en
+          mkdir ja
+          cd ..
           cp pages/top_en.html deploy_out/en/
           cp pages/top_ja.html deploy_out/ja/
           for project in lifegame wolfram_ca boids fake_water fluid spring; do
