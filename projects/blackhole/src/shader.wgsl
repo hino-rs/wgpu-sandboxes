@@ -3,7 +3,7 @@ const PI: f32 = 3.14159265359;
 const MASS: f32 = 3.0;
 const HOLE_CENTER: vec3f = vec3f(0.0);
 const HOLE_RADIUS: f32 = MASS * 2.0;
-const DISK_RADIUS: f32 = HOLE_RADIUS * 4.0;
+const DISK_RADIUS: f32 = HOLE_RADIUS * 8.0;
 const MIN_DT: f32 = 0.01;
 const MAX_DT: f32 = 0.5;
 
@@ -126,11 +126,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var glow: f32 = 0.0;
 
     let dynamic_jet_x = clamp(abs(sin(uniforms.time)) * 0.12, 0.1, 0.3);
+    var dist_to_center: f32;
+
     let max_steps = u32(uniforms.params.y);
 
     for (var i = 0u; i < max_steps; i++) {
         let to_center = HOLE_CENTER - ip;
-        let dist_to_center = length(to_center);
+        dist_to_center = length(to_center);
 
         // レイが十分ブラックホールの遠方ならスキップ
         if (dist_to_center > DISK_RADIUS * 1.5 && dot(rd, to_center) < 0.0) {
@@ -198,7 +200,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let u = 0.5 + atan2(rd.z, rd.x) / (2.0 * PI);
         let v = 0.5 - asin(rd.y) / PI;
         let sky_color = textureSampleLevel(sky_texture, sky_sampler, vec2f(u, v), 0.0);
-        color = mix(sky_color.rgb, vec3f(glow), 0.5);
+        let glow = vec3f(0.5 * glow, 0.5 * glow, 0.3 * glow);
+        color = mix(sky_color.rgb, glow, 0.5);
     }
 
     return vec4f(color, 1.0);

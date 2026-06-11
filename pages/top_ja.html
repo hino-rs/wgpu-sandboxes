@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wgpu-sandboxes | hino-rs</title>
+    <style>
+        :root {
+            --bg-color: #0d0f12;
+            --card-bg: #161a22;
+            --text-color: #f0f6fc;
+            --text-muted: #8b949e;
+            --accent-color: #58a6ff;
+            --border-color: #30363d;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            margin-top: 80px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+            letter-spacing: -0.05em;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin-top: 0;
+        }
+
+        main {
+            max-width: 1000px;
+            width: 90%;
+            margin: 60px 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid coral;
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            /* background: linear-gradient(90deg, #58a6ff, #bc8cff); */
+            background-color: orangered;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            /* border-color: var(--accent-color); */
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card h2 {
+            font-size: 1.4rem;
+            margin-top: 0;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            flex-grow: 1;
+        }
+
+        .card h2 a {
+            color: inherit;
+            text-decoration: none;
+            outline: none;
+        }
+
+        .stretched-link::after {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 1;
+            content: "";
+        }
+
+        .card-footer {
+            margin-top: auto;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .source-link {
+            position: relative;
+            z-index: 2;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 6px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            background-color: rgba(255, 255, 255, 0.02);
+            transition: all 0.2s ease-in-out;
+        }
+
+        .source-link:hover {
+            color: var(--text-color);
+            border-color: var(--accent-color);
+            background-color: rgba(88, 166, 255, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .github-icon {
+            fill: currentColor;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>wgpu Sandboxes</h1>
+        <p>hino-rsのwgpuサンドボックスプロジェクトリスト</p>
+    </header>
+
+    <main>
+        <div class="grid">
+            <div class="card">
+                <h2>
+                    <a href="./projects/wolfram_ca/" class="stretched-link">一次元セルオートマトン</a>
+                </h2>
+                <p>色やルールなどを動的に変更できる基本セルオートマトン</p>
+                <div class="card-footer">
+                    <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/wolfram_ca"
+                        class="source-link" target="_blank" rel="noopener noreferrer">
+                        <svg class="github-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                            <path fill-rule="evenodd"
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                            </path>
+                        </svg>
+                        ソースコード
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    <a href="./projects/lifegame/" class="stretched-link">ライフゲーム</a>
+                </h2>
+                <p>色やルールなどを動的に変更できるライフゲームシミュレータ</p>
+                <div class="card-footer">
+                    <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/lifegame" class="source-link"
+                        target="_blank" rel="noopener noreferrer">
+                        <svg class="github-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                            <path fill-rule="evenodd"
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                            </path>
+                        </svg>
+                        ソースコード
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    <a href="./projects/boids/" class="stretched-link">ボイド</a>
+                </h2>
+                <p>動的にパラメータ調整ができるボイドシミュレータ</p>
+                <div class="card-footer">
+                    <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/boids" class="source-link"
+                        target="_blank" rel="noopener noreferrer">
+                        <svg class="github-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                            <path fill-rule="evenodd"
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                            </path>
+                        </svg>
+                        ソースコード
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    <a href="./projects/fake_water/" class="stretched-link">フェイクウォーター</a>
+                </h2>
+                <p>水の色が低いところに移動するだけ</p>
+                <div class="card-footer">
+                    <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/fake_water"
+                        class="source-link" target="_blank" rel="noopener noreferrer">
+                        <svg class="github-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                            <path fill-rule="evenodd"
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                            </path>
+                        </svg>
+                        ソースコード
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    <a href="./projects/fluid/" class="stretched-link">流体シミュレーター</a>
+                </h2>
+                <p>動的にパラメータ調整ができる、SPH法で実装した流体シミュレーター</p>
+                <div class="card-footer">
+                    <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/fluid" class="source-link"
+                        target="_blank" rel="noopener noreferrer">
+                        <svg class="github-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                            <path fill-rule="evenodd"
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                            </path>
+                        </svg>
+                        ソースコード
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    <a href="./projects/spring/" class="stretched-link">バネ</a>
+                </h2>
+                <p>動的にパラメータ調整ができる減衰振動シミュレータ</p>
+                <div class="card-footer">
+                    <a href="https://github.com/hino-rs/wgpu-sandboxes/tree/main/projects/spring" class="source-link"
+                        target="_blank" rel="noopener noreferrer">
+                        <svg class="github-icon" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                            <path fill-rule="evenodd"
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z">
+                            </path>
+                        </svg>
+                        ソースコード
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>
+                    <a href="#" class="stretched-link">Next Project...</a>
+                </h2>
+                <p>Coming Soon</p>
+            </div>
+        </div>
+    </main>
+</body>
+
+</html>

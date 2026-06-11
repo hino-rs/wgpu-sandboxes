@@ -45,7 +45,8 @@ jobs:
       - name: Prepare Deployment Directory
         run: |
           mkdir -p deploy_out
-          cp index.html deploy_out/
+          cp pages/top_en.html deploy_out/en/
+          cp pages/top_ja.html deploy_out/ja/
           for project in lifegame wolfram_ca boids fake_water fluid spring; do
             mkdir -p "deploy_out/projects/$project"
             cp -r "projects/$project/dist/"* "deploy_out/projects/$project/"
