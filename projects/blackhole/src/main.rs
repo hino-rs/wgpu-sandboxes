@@ -8,11 +8,17 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
+use egui::Context as EguiContext;
+use egui_winit::State as EguiState;
+use egui_wgpu::Renderer as EguiRenderer;
+use egui_wgpu::RendererOptions;
 
 #[derive(Default)]
 struct App {
     window: Option<Arc<Window>>,
     state: Option<State>,
+    egui_ctx: EguiContext,
+    egui_state: Option<EguiState>,
 }
 
 struct State {
@@ -24,26 +30,36 @@ struct State {
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
     time: Instant,
-    resolution: PhysicalSize<u32>,
-    camera_pos: [f32; 4],
-    camera_rot: [f32; 4],
+    uniforms: Uniforms,
+    // resolution: PhysicalSize<u32>,
+    // camera_pos: [f32; 4],
+    // camera_rot: [f32; 4],
     pressed_keys: HashSet<KeyCode>,
-    params: [f32; 4],
+    // params: [f32; 4],
+    egui_renderer: EguiRenderer,
 }
 
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct RaymarchUniforms {
+struct Uniforms {
     time: f32,
     _pad: [f32; 3],
     resolution: [f32; 4],
     camera_pos: [f32; 4],
     camera_rot: [f32; 4],
-    params: [f32; 4],
+    // params: [f32; 4],
+    t_max: f32,
+    max_step: u32,
+    bend_strength_coef: f32,
+    _p: f32,
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
+        
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes().with_title("wgpu raymarching"))
@@ -51,16 +67,35 @@ impl ApplicationHandler for App {
         );
 
         let state = pollster::block_on(State::new(Arc::clone(&window)));
+        
+        let egui_state = EguiState::new(
+            self.egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            None,
+            None,
+            None,
+        );
+
         self.window = Some(window);
         self.state = Some(state);
+        self.egui_state = Some(egui_state);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        if let Some(egui_state) = &mut self.egui_state {
+            let response = egui_state.on_window_event(self.window.as_ref().unwrap(), &event);
+            if response.consumed {
+                return;
+            }    
+        }
+        
+        
         match event {
             WindowEvent::Resized(size) => {
                 if let Some(state) = &mut self.state {
                     state.resize(size);
-                    state.resolution = size;
+                    state.uniforms.resolution = [size.width as f32, size.height as f32, 0.0, 0.0];
                 }
             }
 
@@ -69,12 +104,48 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let Some(state) = &mut self.state {
-                    // state.update();
-                    state.render();
-                }
+                if let (Some(state),Some(egui_state), Some(window)) = (&mut self.state, &mut self.egui_state, &self.window) {
+                    let raw_input = egui_state.take_egui_input(window);
+                    self.egui_ctx.begin_pass(raw_input);
 
-                if let Some(_window) = &self.window {}
+                    egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
+                        ui.label("Max travel distance of ray");
+                        ui.add(egui::Slider::new(&mut state.uniforms.t_max, 512.0..=2048.0));
+                        
+                        ui.label("Max steps of marching");
+                        ui.add(egui::Slider::new(&mut state.uniforms.max_step, 32..=512));
+                        
+                        ui.label("Bend strength coef");
+                        ui.add(egui::Slider::new(&mut state.uniforms.bend_strength_coef, 0.0..=100.0));
+                    });
+
+                    let egui_output = self.egui_ctx.end_pass();
+                    egui_state.handle_platform_output(window, egui_output.platform_output);
+
+                    for (id, image_delta) in &egui_output.textures_delta.set {
+                        state.egui_renderer.update_texture(
+                            &state.device,
+                            &state.queue,
+                            *id,
+                            image_delta,
+                        );
+                    }
+
+                    for id in &egui_output.textures_delta.free {
+                        state.egui_renderer.free_texture(id);
+                    }
+
+                    let paint_jobs = self
+                        .egui_ctx
+                        .tessellate(egui_output.shapes, egui_output.pixels_per_point);
+
+                    let screen_descripter = egui_wgpu::ScreenDescriptor {
+                        size_in_pixels: [state.config.width, state.config.height],
+                        pixels_per_point: egui_output.pixels_per_point,
+                    };
+
+                    state.render(&paint_jobs, &screen_descripter);
+                } 
             }
 
             WindowEvent::KeyboardInput {
@@ -182,7 +253,7 @@ impl State {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
 
-        let uniform_data = RaymarchUniforms::default();
+        let uniform_data = Uniforms::default();
 
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Uniform Buffer"),
@@ -342,6 +413,12 @@ impl State {
 
         let time = std::time::Instant::now();
 
+        let egui_renderer = EguiRenderer::new(
+            &device,
+            config.format,
+            RendererOptions::default(),
+        );
+
         Self {
             surface,
             device,
@@ -351,28 +428,33 @@ impl State {
             bind_group,
             uniform_buffer,
             time,
-            resolution: PhysicalSize {
-                width: size.width,
-                height: size.height,
+            uniforms: Uniforms {
+                time: 0.0,
+                _pad: [0.0, 0.0, 0.0],
+                resolution: [
+                    size.width as f32,
+                    size.height as f32,
+                    0.0,
+                    0.0,
+                    ],
+                camera_pos: [0.0, 0.0, -30.0, 0.0],
+                camera_rot: Default::default(),
+                t_max: 1024.0, 
+                max_step: 256, 
+                bend_strength_coef: 10.0, 
+                _p: 0.0,
             },
-            camera_pos: [0.0, 0.0, -30.0, 0.0],
-            camera_rot: Default::default(),
             pressed_keys: HashSet::new(),
-            params: [1024.0, 256.0, 0., 0.], 
+            egui_renderer,
         }
     }
 
     fn update(&mut self) {
         let time = Instant::now().duration_since(self.time).as_secs_f32();
-        let resolution = [
-            self.resolution.width as f32,
-            self.resolution.height as f32,
-            0.0,
-            0.0,
-        ];
+        self.uniforms.time = time;
 
-        let yaw = self.camera_rot[0];
-        let pitch = self.camera_rot[1];
+        let yaw = self.uniforms.camera_rot[0];
+        let pitch = self.uniforms.camera_rot[1];
 
         // 視線方向（前）ベクトルを計算 (単位ベクトル)
         let forward = [
@@ -396,50 +478,43 @@ impl State {
         for key in &self.pressed_keys {
             match key {
                 KeyCode::KeyW => {
-                    self.camera_pos[0] += forward[0] * speed;
-                    self.camera_pos[1] += forward[1] * speed;
-                    self.camera_pos[2] += forward[2] * speed;
+                    self.uniforms.camera_pos[0] += forward[0] * speed;
+                    self.uniforms.camera_pos[1] += forward[1] * speed;
+                    self.uniforms.camera_pos[2] += forward[2] * speed;
                 }
                 KeyCode::KeyS => {
-                    self.camera_pos[0] -= forward[0] * speed;
-                    self.camera_pos[1] -= forward[1] * speed;
-                    self.camera_pos[2] -= forward[2] * speed;
+                    self.uniforms.camera_pos[0] -= forward[0] * speed;
+                    self.uniforms.camera_pos[1] -= forward[1] * speed;
+                    self.uniforms.camera_pos[2] -= forward[2] * speed;
                 }
                 KeyCode::KeyA => {
-                    self.camera_pos[0] -= right[0] * speed;
-                    self.camera_pos[1] -= right[1] * speed;
-                    self.camera_pos[2] -= right[2] * speed;
+                    self.uniforms.camera_pos[0] -= right[0] * speed;
+                    self.uniforms.camera_pos[1] -= right[1] * speed;
+                    self.uniforms.camera_pos[2] -= right[2] * speed;
                 }
                 KeyCode::KeyD => {
-                    self.camera_pos[0] += right[0] * speed;
-                    self.camera_pos[1] += right[1] * speed;
-                    self.camera_pos[2] += right[2] * speed;
+                    self.uniforms.camera_pos[0] += right[0] * speed;
+                    self.uniforms.camera_pos[1] += right[1] * speed;
+                    self.uniforms.camera_pos[2] += right[2] * speed;
                 }
-                KeyCode::Space => self.camera_pos[1] += speed,
-                KeyCode::ControlLeft | KeyCode::ControlRight => self.camera_pos[1] -= speed,
+                KeyCode::Space => self.uniforms.camera_pos[1] += speed,
+                KeyCode::ControlLeft | KeyCode::ControlRight => self.uniforms.camera_pos[1] -= speed,
 
-                KeyCode::ArrowUp => self.camera_rot[1] -= 0.01,
-                KeyCode::ArrowLeft => self.camera_rot[0] -= 0.01,
-                KeyCode::ArrowDown => self.camera_rot[1] += 0.01,
-                KeyCode::ArrowRight => self.camera_rot[0] += 0.01,
+                KeyCode::ArrowUp => self.uniforms.camera_rot[1] -= 0.01,
+                KeyCode::ArrowLeft => self.uniforms.camera_rot[0] -= 0.01,
+                KeyCode::ArrowDown => self.uniforms.camera_rot[1] += 0.01,
+                KeyCode::ArrowRight => self.uniforms.camera_rot[0] += 0.01,
                 _ => {}
             }
         }
 
-        let uniform_data = RaymarchUniforms {
-            time,
-            resolution,
-            camera_pos: self.camera_pos,
-            camera_rot: self.camera_rot,
-            params: self.params,
-            ..Default::default()
-        };
+        let uniform_data = self.uniforms;
 
         self.queue
             .write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform_data));
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
@@ -466,6 +541,14 @@ impl State {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
+        self.egui_renderer.update_buffers(
+            &self.device, 
+            &self.queue, 
+            &mut encoder, 
+            paint_jobs, 
+            screen_descriptor,
+        );
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -495,6 +578,27 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.bind_group, &[]);
             render_pass.draw(0..3, 0..1);
+        }
+
+        {
+            let mut egui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None
+            }).forget_lifetime();
+
+            self.egui_renderer.render(&mut egui_pass, paint_jobs, screen_descriptor);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

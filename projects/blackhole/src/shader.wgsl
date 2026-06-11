@@ -17,7 +17,10 @@ struct Uniforms {
     resolution: vec4f,
     camera_pos: vec4f,
     camera_rot: vec4f,
-    params: vec4f, // [T_MAX, MAX_STEP, 0.0, 0.0]
+    t_max: f32,
+    max_steps: u32,
+    bend_strength_coef: f32,
+    _p: f32
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -128,9 +131,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let dynamic_jet_x = clamp(abs(sin(uniforms.time)) * 0.12, 0.1, 0.3);
     var dist_to_center: f32;
 
-    let max_steps = u32(uniforms.params.y);
-
-    for (var i = 0u; i < max_steps; i++) {
+    for (var i = 0u; i < uniforms.max_steps; i++) {
         let to_center = HOLE_CENTER - ip;
         dist_to_center = length(to_center);
 
@@ -147,7 +148,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         }
 
         let bend = to_center / dist_to_center;
-        let bend_strength = 10.0 * MASS;
+        let bend_strength = uniforms.bend_strength_coef * MASS;
         let dist3 = dist_to_center * dist_to_center * dist_to_center;
         
         let o_rd = rd;
@@ -187,7 +188,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         ip += rd * dt;
         t += dt;
 
-        if (t > uniforms.params.x) {
+        if (t > uniforms.t_max) {
             break;
         }
     }
@@ -204,5 +205,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         color = mix(sky_color.rgb, glow, 0.5);
     }
 
-    return vec4f(color, 1.0);
+    return vec4f(color*vec3f(0.01), 1.0);
 }
