@@ -360,6 +360,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-logger",
  "web-sys",
+ "web-time",
  "wgpu",
  "winit",
 ]

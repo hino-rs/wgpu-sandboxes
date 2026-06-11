@@ -201,9 +201,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let u = 0.5 + atan2(rd.z, rd.x) / (2.0 * PI);
         let v = 0.5 - asin(rd.y) / PI;
         let sky_color = textureSampleLevel(sky_texture, sky_sampler, vec2f(u, v), 0.0);
-        let glow = vec3f(0.5 * glow, 0.5 * glow, 0.3 * glow);
+        let glow = vec3f(0.7 * glow, 0.7 * glow, 0.55 * glow);
         color = mix(sky_color.rgb, glow, 0.5);
     }
 
-    return vec4f(color*vec3f(0.01), 1.0);
+    return vec4f(color/**vec3f(0.01)*/, 1.0);
 }
