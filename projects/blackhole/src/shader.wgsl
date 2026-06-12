@@ -73,16 +73,21 @@ fn rotate_y(p: vec3f, a: f32) -> vec3f {
     return vec3f(p.x * c + p.z * s, p.y, -p.x * s + p.z * c);
 }
 
-// vec3用0~1ハッシュ関数
-fn hash31(p: vec3<f32>) -> f32 {
-    var p3 = fract(p * 0.1031);
+// f32用0~1ハッシュ
+fn hash(n: f32) -> f32 {
+    return fract(sin(n) * 43758.5453123);
+}
+
+// vec2用0~1ハッシュ
+fn hash21(p: vec2f) -> f32 {
+    var p3 = fract(vec3f(p.xyx) * 0.1031);
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
 }
 
-// vec2用0~1ハッシュ関数
-fn hash21(p: vec2f) -> f32 {
-    var p3 = fract(vec3f(p.xyx) * 0.1031);
+// vec3用0~1ハッシュ
+fn hash31(p: vec3<f32>) -> f32 {
+    var p3 = fract(p * 0.1031);
     p3 += dot(p3, p3.yzx + 33.33);
     return fract((p3.x + p3.y) * p3.z);
 }
@@ -103,12 +108,16 @@ fn fbm(st: vec2f, octaves: u32) -> f32 {
     var amplitude = 0.5;
     var frequency = 1.0;
     for (var i = 0u; i < octaves; i++) {
-        value += amplitude * noise(st * frequency);
+        // value += amplitude * noise(st * frequency);
+        value += amplitude * abs(noise((st * frequency)*noise(st * frequency)));
         frequency *= 2.0;
         amplitude *= 0.5;
     }
     return value;
 }
+
+const color_inner = vec3f(0.5, 0.8, 1.5);
+const color_outer = vec3f(1.0, 0.2, 0.0);
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
@@ -127,9 +136,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var hit = false;
 
     var ip = ro + rd * hash21(in.uv * uniforms.time) * 0.5;
-    var glow: f32 = 0.0;
+    var glow = vec3f(0.0);
+    var gas_color = vec3f(0.0);
 
-    let dynamic_jet_x = clamp(abs(sin(uniforms.time)) * 0.12, 0.1, 0.3);
     var dist_to_center: f32;
 
     for (var i = 0u; i < uniforms.max_steps; i++) {
@@ -141,8 +150,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             break;
         }
 
-        let dt = clamp(dist_to_center * 0.1, uniforms.min_dt, uniforms.max_dt);
-
+        let dt = clamp((dist_to_center * 0.1 + length(uniforms.camera_pos)*0.01), uniforms.min_dt, uniforms.max_dt);
+        
         if (dist_to_center < HOLE_RADIUS + 0.01) {
             hit = true;
             break;
@@ -157,7 +166,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
         glow += distance(o_rd.z, rd.z) * uniforms.light_up_coef; // 少し辺りを照らす
 
+        rd = normalize(rd);
+        ip += rd * dt;
+
         let r = length(ip.xz);
+        // let color_factor = smoothstep(HOLE_RADIUS * 1.5, DISK_RADIUS * 0.8, r); // 内側なら 0.0、外側なら 1.0
         
         // --- 円盤ガス ---
         let theta = atan2(ip.z, ip.x);
@@ -165,18 +178,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let y_falloff = exp(-abs(ip.y) * 2.0);
         let disk_mask = r_mask * y_falloff;
         if (disk_mask > 0.001) {
-            let spiral = theta - (uniforms.time * 2.0 + 10.0) / r;
+            let spiral = theta - (uniforms.time * 25.0 + 10.0) / r;
             let noise_coord = vec2f(r, spiral);
-            let n = fbm(noise_coord * 0.5, 3);
+            let n = fbm(noise_coord * 0.5, 6);
             let gas_density = disk_mask * n;
-            glow += gas_density * dt;
+            // if ((color_factor > 0.99 || color_factor < 0.2)) {
+                // let gas_color = mix(color_inner, color_outer, color_factor);
+                // glow += gas_density * dt * gas_color;
+            // } else {
+                glow += gas_density * dt;
+            // }
         }
 
         // --- ジェット ---
         let jet_r = r;
         let jet_y = abs(ip.y);
         let jet_cone = smoothstep(jet_y * 0.2, 0.0, jet_r);
-        let jet_falloff = exp(-jet_y * dynamic_jet_x);
+        let jet_falloff = exp(-jet_y * 0.05);
         let jet_mask = jet_cone * jet_falloff;
         if (jet_mask > 0.001) {
             let jet_theta = theta;
@@ -185,8 +203,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             glow += jet_mask * jet_n * dt;
         }
         
-        rd = normalize(rd);
-        ip += rd * dt;
         t += dt;
 
         if (t > uniforms.t_max) {
@@ -195,16 +211,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
 
     var color = vec3f(0.0);
-    let glows = vec3f(0.7 * glow, 0.7 * glow, 0.55 * glow);
+    glow *= vec3f(0.7, 0.7, 0.55);
+    //  = vec3f(0.7 * glow, 0.7 * glow, 0.55 * glow);
 
     if (hit) {
-        color = vec3f(0.0 + glows*vec3f(0.5));
+        color = vec3f(0.0 + glow*vec3f(0.5));
     } else {
         let u = 0.5 + atan2(rd.z, rd.x) / (2.0 * PI);
         let v = 0.5 - asin(rd.y) / PI;
         let sky_color = textureSampleLevel(sky_texture, sky_sampler, vec2f(u, v), 0.0);
         
-        color = mix(sky_color.rgb, glows, 0.5);
+        color = mix(sky_color.rgb, glow, 0.5);
     }
 
     return vec4f(color/**vec3f(0.01)*/, 1.0);
