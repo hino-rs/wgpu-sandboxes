@@ -235,7 +235,23 @@ impl State {
         }
     }
     pub async fn new(window: Arc<Window>) -> Self {
-        let size = window.inner_size();
+        let mut size = window.inner_size();
+        #[cfg(target_arch = "wasm32")]
+        {
+            if size.width == 0 || size.height == 0 {
+                let web_window = web_sys::window().unwrap();
+                let dpr = web_window.device_pixel_ratio();
+                let width = (web_window.inner_width().unwrap().as_f64().unwrap() * dpr) as u32;
+                let height = (web_window.inner_height().unwrap().as_f64().unwrap() * dpr) as u32;
+                size = winit::dpi::PhysicalSize::new(width.max(1), height.max(1));
+
+                use winit::platform::web::WindowExtWebSys;
+                if let Some(canvas) = window.canvas() {
+                    canvas.set_width(size.width);
+                    canvas.set_height(size.height);
+                }
+            }
+        }
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -269,7 +285,12 @@ impl State {
             .unwrap();
 
         let surface_caps = surface.get_capabilities(&adapter);
-        let surface_format = surface_caps.formats[0];
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| f.is_srgb())
+            .unwrap_or(surface_caps.formats[0]);
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -692,6 +713,14 @@ pub fn run() {
             use winit::platform::web::WindowExtWebSys;
             let canvas = window.canvas().unwrap();
             let web_window = web_sys::window().unwrap();
+            
+            // Set initial canvas size based on window size and device pixel ratio
+            let dpr = web_window.device_pixel_ratio();
+            let width = (web_window.inner_width().unwrap().as_f64().unwrap() * dpr) as u32;
+            let height = (web_window.inner_height().unwrap().as_f64().unwrap() * dpr) as u32;
+            canvas.set_width(width);
+            canvas.set_height(height);
+
             let document = web_window.document().unwrap();
             let body = document.body().unwrap();
             body.append_child(&canvas).unwrap();

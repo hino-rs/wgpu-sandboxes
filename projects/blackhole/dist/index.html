@@ -6,8 +6,8 @@
     <title>WGPU Blackhole Simulator</title>
     
 <script type="module">
-import init, * as bindings from '/blackhole-e2915d87d1cd4ce8.js';
-const wasm = await init({ module_or_path: '/blackhole-e2915d87d1cd4ce8_bg.wasm' });
+import init, * as bindings from '/blackhole-ca4a79474d4458fb.js';
+const wasm = await init({ module_or_path: '/blackhole-ca4a79474d4458fb_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -28,7 +28,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
             background-color: #000;
         }
     </style>
-<link rel="modulepreload" href="/blackhole-e2915d87d1cd4ce8.js" crossorigin="anonymous" integrity="sha384-3FhKj+uSfbLR1paCptC5CQtrUJ/kv+PrK9+BEba7ZMyACE520nyRpuZ0+l4S/QVK"><link rel="preload" href="/blackhole-e2915d87d1cd4ce8_bg.wasm" crossorigin="anonymous" integrity="sha384-8xDpvrD1Hs15lPrBniY1JhMGEpAEmNrqmVEOw7X+5qkLRsNlhKoQwofnswIxjfA5" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/blackhole-ca4a79474d4458fb.js" crossorigin="anonymous" integrity="sha384-gLK+LBXQli4/ItVvLXd9d09nzQ4kcXLMJcE2uSarYrHLtSq6cNhp1GQHJikQo8UK"><link rel="preload" href="/blackhole-ca4a79474d4458fb_bg.wasm" crossorigin="anonymous" integrity="sha384-CZDloAMGnNIpJv+nQTDXhXQND2a9LX6Lq1WkEdlsqxronw1Gv3IuWa9bYG97fEz+" as="fetch" type="application/wasm"></head>
 
 <body>
 <script>"use strict";

@@ -12,8 +12,8 @@ struct VertexOutput {
 
 struct Uniforms {
     time: f32,
-    min_dt: f32,
     max_dt: f32,
+    min_dt: f32,
     _p: f32,
     resolution: vec4f,
     camera_pos: vec4f,
