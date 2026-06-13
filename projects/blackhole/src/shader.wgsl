@@ -170,8 +170,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             break;
         }
 
-        let dt = clamp((dist_to_center * 0.1 + length(uniforms.camera_pos)*0.01), uniforms.min_dt, uniforms.max_dt);
-        
+        var dt = clamp((dist_to_center * 0.1 + length(uniforms.camera_pos)*0.01), uniforms.min_dt, uniforms.max_dt);
+        // 円盤面かつ円盤の半径内に入っている場合ステップサイズを細かくする
+        let r_current = length(ip.xz);
+        let in_disk_r = step(HOLE_RADIUS * 1.2, r_current) * step(r_current, DISK_RADIUS);
+        let near_plane = exp(-abs(ip.y) * 1.5);
+        dt *= mix(1.0, 0.25, in_disk_r * near_plane);
+
         if (dist_to_center < HOLE_RADIUS + 0.01) {
             hit = true;
             break;
