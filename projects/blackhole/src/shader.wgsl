@@ -168,6 +168,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var ip = ro + rd * hash21(in.uv * uniforms.time) * 0.5;
     var glow = vec3f(0.0);
     var gas_color = vec3f(0.0);
+    var min_r = 1e9;
 
     var dist_to_center: f32;
 
@@ -176,6 +177,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     for (var i = 0u; i < uniforms.max_steps; i++) {
         let to_center = HOLE_CENTER - ip;
         dist_to_center = length(to_center);
+        min_r = min(min_r, dist_to_center);
 
         // レイが十分ブラックホールの遠方ならマーチングスキップ
         if (dist_to_center > DISK_RADIUS * 1.5 && dot(rd, to_center) < 0.0) {
@@ -319,16 +321,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     }
 
     var color = vec3f(0.0);
+    // glow *= vec3f(0.7, 0.7, 0.55);
+
+    // アインシュタインリング
+    let photon_r = HOLE_RADIUS * 1.5;
+    let ring = smoothstep(photon_r * 1.05, photon_r, min_r) * smoothstep(photon_r * 0.95, photon_r, min_r);
+    glow += vec3f(1.0, 0.97, 0.90) * ring * 3.0 * transmittance;
     glow *= vec3f(0.7, 0.7, 0.55);
 
     if (hit) {
-        color = vec3f(0.0 + glow*vec3f(0.5));
+        // color = vec3f(0.0 + glow*vec3f(0.5));
+        color = glow;
     } else {
         let u = 0.5 + atan2(rd.z, rd.x) / (2.0 * PI);
         let v = 0.5 - asin(rd.y) / PI;
         let sky_color = textureSampleLevel(sky_texture, sky_sampler, vec2f(u, v), 0.0);
         
-        color = mix(sky_color.rgb, glow, 0.5);
+        // color = mix(sky_color.rgb, glow, 0.5);
+        color = sky_color.rgb * transmittance + glow;
     }
 
     // let mapped_color = reinhard_simple(color);
