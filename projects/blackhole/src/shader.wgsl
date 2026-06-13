@@ -137,6 +137,18 @@ fn grav_shift(pos: vec3f) -> f32 {
     return sqrt(max(1.0 - HOLE_RADIUS / r, 0.0));
 }
 
+// 温度を色に変換する
+fn temp_color(t: f32) -> vec3f {
+    let red    = vec3f(1.00, 0.22, 0.05);
+    let orange = vec3f(1.00, 0.62, 0.20);
+    let white  = vec3f(1.00, 0.95, 0.90);
+    let blue   = vec3f(0.70, 0.82, 1.20);
+    var c = mix(red, orange, smoothstep(0.0, 0.35, t));
+    c = mix(c, white, smoothstep(0.35, 0.7, t));
+    c = mix(c, blue,  smoothstep(0.7, 1.0, t));
+    return c;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let aspect = uniforms.resolution.x / uniforms.resolution.y;
@@ -238,14 +250,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             let g = 0.6;
             let phase = henyey_greenstein(rd, light_dir, g);
 
-            var base_color = vec3f(0.0);
-            if (color_factor < 0.2) {
-                base_color = mix(color_core, color_mid, color_factor / 0.2);
-            } else {
-                base_color = mix(color_mid, color_outer, (color_factor - 0.2) / 0.8);
-            }
+            // var base_color = vec3f(0.0);
+            // if (color_factor < 0.2) {
+            //     base_color = mix(color_core, color_mid, color_factor / 0.2);
+            // } else {
+            //     base_color = mix(color_mid, color_outer, (color_factor - 0.2) / 0.8);
+            // }
+            // let energy_boost = exp((1.0 - color_factor) * 2.5);
+            // var scattered_light = base_color * gas_density * phase * energy_boost;
 
-            let energy_boost = exp((1.0 - color_factor) * 2.5);
+            let temp = clamp(pow((HOLE_RADIUS * 1.5) / max(r, HOLE_RADIUS * 1.5), 0.75), 0.0, 1.0);
+            let base_color = temp_color(temp);
+            let energy_boost = 1.0 + 8.0 * temp; // 内縁ほど強く発光
             var scattered_light = base_color * gas_density * phase * energy_boost;
 
             // ドップラー効果と重力赤方偏移
@@ -317,9 +333,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     // let mapped_color = reinhard_simple(color);
     // let mapped_color = reinhard_extended(color, 1.0);
-    let mapped_color = reinhard_luminance(color);
+    // let mapped_color = reinhard_luminance(color);
     // let mapped_color = ACES_fitted(color);
-    return vec4f(mapped_color/**vec3f(0.01)*/, 1.0);
+    
+    let exposed = color * 1.5;
+    let mapped_color = ACES_fitted(exposed);
+
+    return vec4f(mapped_color, 1.0);
 }
 
 fn henyey_greenstein(view_dir: vec3f, light_dir: vec3f, g: f32) -> f32 {
