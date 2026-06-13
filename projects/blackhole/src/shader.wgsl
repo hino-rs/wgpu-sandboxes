@@ -38,27 +38,6 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
     return out;
 }
 
-// 球体のSDF
-fn sdf_sphere(p: vec3f, s: f32) -> f32 {
-    return length(p) - s;
-}
-
-// シーン全体のSDF
-fn map(p: vec3f) -> vec2f {
-    let sphere_dist = sdf_sphere(p, HOLE_RADIUS);
-    return vec2f(sphere_dist, 1.0);
-}
-
-// 法線の計算
-fn get_normal(p: vec3f) -> vec3f {
-    let e = vec2f(0.001, 0.0);
-    return normalize(vec3f(
-        map(p + e.xyy).x - map(p - e.xyy).x,
-        map(p + e.yxy).x - map(p - e.yxy).x,
-        map(p + e.yyx).x - map(p - e.yyx).x,
-    ));
-}
-
 // カメラ回転用
 fn rotate_x(p: vec3f, a: f32) -> vec3f {
     let c = cos(a); 
@@ -103,6 +82,7 @@ fn noise(st: vec2f) -> f32 {
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
+// ガス用
 fn fbm(st: vec2f, octaves: u32) -> f32 {
     var value = 0.0;
     var amplitude = 0.5;
@@ -118,6 +98,17 @@ fn fbm(st: vec2f, octaves: u32) -> f32 {
 
 const color_inner = vec3f(0.5, 0.8, 1.5);
 const color_outer = vec3f(1.0, 0.2, 0.0);
+
+fn get_g_acceleration(pos: vec3f, dir: vec3f) -> vec3f { 
+    let to_center = HOLE_CENTER - pos;
+    let dist = length(to_center);
+    
+    let bend = to_center / dist; 
+    let bend_strength = uniforms.bend_strength_coef * MASS; 
+    let dist3 = dist * dist * dist; 
+    
+    return dir + (bend_strength * (1.0 / dist3) * bend); 
+}
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
@@ -157,20 +148,36 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             break;
         }
 
-        let bend = to_center / dist_to_center;
-        let bend_strength = uniforms.bend_strength_coef * MASS;
-        let dist3 = dist_to_center * dist_to_center * dist_to_center;
-        
-        let o_rd = rd;
-        rd += bend_strength * (1.0 / dist3) * bend * dt;
+        let prev_rd = rd;
 
-        glow += distance(o_rd.z, rd.z) * uniforms.light_up_coef; // 少し辺りを照らす
+        let p1 = ip;
+        let v1 = rd;
+        let k1 = get_g_acceleration(p1, v1);
+        
+        let v2 = v1 + k1 * (dt / 2.0);
+        let p2 = p1 + v2 * (dt / 2.0);
+        let k2 = get_g_acceleration(p2, v2);
+        
+        let v3 = v1 + k2 * (dt / 2.0);
+        let p3 = p1 + v3 * (dt / 2.0);
+        let k3 = get_g_acceleration(p3, v3);
+
+        let v4 = v1 + k3 * dt;
+        let p4 = p1 + v4 * dt;
+        let k4 = get_g_acceleration(p4, v4);
+
+        let k_blend = (k1 + 2*k2 + 2*k3 + k4) / 6;
+        rd += k_blend * dt;
+
+        let v_blend = (v1 + 2.0 * v2 + 2.0 * v3 + v4) / 6.0;
+        ip += v_blend * dt;
+
+        glow += distance(prev_rd.z, rd.z) * uniforms.light_up_coef; // 少し辺りを照らす
 
         rd = normalize(rd);
-        ip += rd * dt;
-
+        
         let r = length(ip.xz);
-        // let color_factor = smoothstep(HOLE_RADIUS * 1.5, DISK_RADIUS * 0.8, r); // 内側なら 0.0、外側なら 1.0
+        let color_factor = smoothstep(HOLE_RADIUS * 1.5, DISK_RADIUS * 0.8, r); // 内側なら 0.0、外側なら 1.0
         
         // --- 円盤ガス ---
         let theta = atan2(ip.z, ip.x);
@@ -182,12 +189,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             let noise_coord = vec2f(r, spiral);
             let n = fbm(noise_coord * 0.5, 6);
             let gas_density = disk_mask * n;
-            // if ((color_factor > 0.99 || color_factor < 0.2)) {
-                // let gas_color = mix(color_inner, color_outer, color_factor);
-                // glow += gas_density * dt * gas_color;
-            // } else {
+            if ((color_factor > 0.999 || color_factor < 0.2)) {
+                let gas_color = mix(color_inner, color_outer, color_factor);
+                glow += gas_density * dt * gas_color;
+            } else {
                 glow += gas_density * dt;
-            // }
+            }
         }
 
         // --- ジェット ---
@@ -212,7 +219,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var color = vec3f(0.0);
     glow *= vec3f(0.7, 0.7, 0.55);
-    //  = vec3f(0.7 * glow, 0.7 * glow, 0.55 * glow);
 
     if (hit) {
         color = vec3f(0.0 + glow*vec3f(0.5));

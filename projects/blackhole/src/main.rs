@@ -128,7 +128,7 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(&mut state.uniforms.bend_strength_coef, 0.0..=100.0));
                         
                         ui.label("Light up coef");
-                        ui.add(egui::Slider::new(&mut state.uniforms.light_up_coef, 0.0..=5.0));
+                        ui.add(egui::Slider::new(&mut state.uniforms.light_up_coef, 0.00000..=0.00100));
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
@@ -456,7 +456,7 @@ impl State {
                 t_max: 1024.0, 
                 max_step: 256, 
                 bend_strength_coef: 10.0, 
-                light_up_coef: 0.3,
+                light_up_coef: 0.0001,
             },
             pressed_keys: HashSet::new(),
             egui_renderer,
