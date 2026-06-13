@@ -21,7 +21,7 @@ struct Uniforms {
     t_max: f32,
     max_steps: u32,
     bend_strength_coef: f32,
-    light_up_coef: f32,
+    exposure_coef: f32,
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -96,23 +96,9 @@ fn fbm(st: vec2f, octaves: u32) -> f32 {
     return value;
 }
 
-// const color_inner = vec3f(0.5, 0.8, 1.5);
-// const color_outer = vec3f(1.0, 0.2, 0.0);
-
 const color_core = vec3f(3.0, 3.5, 4.5);
 const color_mid = vec3f(0.1, 0.5, 3.0);
 const color_outer = vec3f(0.02, 0.0, 0.2);
-
-// fn get_g_acceleration(pos: vec3f, dir: vec3f) -> vec3f { 
-//     let to_center = HOLE_CENTER - pos;
-//     let dist = length(to_center);
-    
-//     let bend = to_center / dist; 
-//     let bend_strength = uniforms.bend_strength_coef * MASS; 
-//     let dist3 = dist * dist * dist; 
-    
-//     return dir + (bend_strength * (1.0 / dist3) * bend); 
-// }
 
 fn accel(pos: vec3f, vel: vec3f) -> vec3f {
     let r2 = dot(pos, pos);
@@ -230,36 +216,25 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         let color_factor = smoothstep(HOLE_RADIUS * 1.5, DISK_RADIUS * 0.8, r); // 内側なら 0.0、外側なら 1.0
         
         // --- 円盤ガス ---
-        // let theta = atan2(ip.z, ip.x);
         let r_mask = smoothstep(HOLE_RADIUS * 1.2, HOLE_RADIUS * 1.5, r) * smoothstep(DISK_RADIUS, DISK_RADIUS * 0.8, r);
-        let y_falloff = exp(-abs(ip.y) * 2.0);
+        let thickness = mix(0.15, 0.6, smoothstep(HOLE_RADIUS * 1.5, DISK_RADIUS, r));
+        let y_falloff = exp(-pow(ip.y / thickness, 2.0));
         let disk_mask = r_mask * y_falloff;
+
         if (disk_mask > 0.001) {
-            // let spiral = theta - (uniforms.time * 25.0 + 10.0) / r;
-            // let noise_coord = vec2f(r, spiral);
-            // let n = fbm(noise_coord * 0.5, 6);
             let r_in = HOLE_RADIUS * 1.5;
             let omega = 12.0 * pow(r_in / max(r, 0.1), 1.5);
             let a = uniforms.time * omega;
             let ca = cos(a);
             let sa = sin(a);
             let q = vec2f(ip.x * ca - ip.z * sa, ip.x * sa + ip.z * ca);
-            var n = fbm(q * 0.18, 6);
+            var n = fbm(q * 0.30, 6);
             n = pow(n, 1.5);
             let gas_density = disk_mask * n;
 
             let light_dir = normalize(HOLE_CENTER - ip);
             let g = 0.6;
             let phase = henyey_greenstein(rd, light_dir, g);
-
-            // var base_color = vec3f(0.0);
-            // if (color_factor < 0.2) {
-            //     base_color = mix(color_core, color_mid, color_factor / 0.2);
-            // } else {
-            //     base_color = mix(color_mid, color_outer, (color_factor - 0.2) / 0.8);
-            // }
-            // let energy_boost = exp((1.0 - color_factor) * 2.5);
-            // var scattered_light = base_color * gas_density * phase * energy_boost;
 
             let temp = clamp(pow((HOLE_RADIUS * 1.5) / max(r, HOLE_RADIUS * 1.5), 0.75), 0.0, 1.0);
             let base_color = temp_color(temp);
@@ -274,8 +249,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             scattered_light *= pow(max(shift, 0.0), BEAM);
             scattered_light *= mix(vec3f(1.2, 0.7, 0.4), vec3f(0.5, 0.8, 1.4), smoothstep(0.6, 1.5, shift));
 
-            // let base_color = mix(color_inner, color_outer, color_factor);
-            // let scattered_light = base_color * gas_density * phase;
             glow += scattered_light * dt * transmittance;
             let absorption_coef = 4.0; // ガスの不透明さを調整する係数
             transmittance *= exp(-gas_density * dt * absorption_coef);
@@ -283,21 +256,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 break;
             }
 
-
-            // if ((color_factor > 0.999 || color_factor < 0.2)) {
-                // let gas_color = mix(color_inner, color_outer, color_factor);
-            //     glow += gas_density * dt * gas_color;
-            // } else {
-            //     glow += gas_density * dt;
-            // // }
-            // let opacity = gas_density * dt;
-            // let absorption = exp(-opacity);
-
-            // // glow += gas_color * opacity * transmittance;
-            // glow += opacity * transmittance * henyey_greenstein(rd, );
-            // transmittance *= absorption;
-
-            // if (transmittance < 0.01) { break; }
         }
 
         // --- ジェット ---
@@ -307,10 +265,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         // let jet_falloff = exp(-jet_y * 0.05);
         // let jet_mask = jet_cone * jet_falloff;
         // if (jet_mask > 0.001) {
-        //     let jet_theta = theta;
-        //     let jet_coord = vec2f(jet_theta, ip.y - uniforms.time * 10.0);
-        //     let jet_n = fbm(jet_coord * 0.8, 2);
-        //     glow += jet_mask * jet_n * dt;
+        //     let jet_omega = 2.0;
+        //     let jet_a = uniforms.time * jet_omega;
+        //     let jet_ca = cos(jet_a);
+        //     let jet_sa = sin(jet_a);
+        //     let jet_q = vec2f(ip.x * jet_ca - ip.z * jet_sa, ip.y - uniforms.time * 10.0);
+        //     let jet_n = fbm(jet_q * 0.5, 2);
+        //     let jet_color = vec3f(0.3, 0.6, 1.5);
+        //     glow += jet_color * (jet_mask * jet_n) * dt * transmittance;
         // }
         
         t += dt;
@@ -341,12 +303,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         color = sky_color.rgb * transmittance + glow;
     }
 
-    // let mapped_color = reinhard_simple(color);
-    // let mapped_color = reinhard_extended(color, 1.0);
-    // let mapped_color = reinhard_luminance(color);
-    // let mapped_color = ACES_fitted(color);
+    let exposed = color * uniforms.exposure_coef;
     
-    let exposed = color * 1.5;
+    // let mapped_color = reinhard_simple(exposed);
+    // let mapped_color = reinhard_extended(exposed, 1.0);
+    // let mapped_color = reinhard_luminance(exposed);
     let mapped_color = ACES_fitted(exposed);
 
     return vec4f(mapped_color, 1.0);

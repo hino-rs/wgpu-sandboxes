@@ -1,3 +1,7 @@
+use egui::Context as EguiContext;
+use egui_wgpu::Renderer as EguiRenderer;
+use egui_wgpu::RendererOptions;
+use egui_winit::State as EguiState;
 use std::{collections::HashSet, sync::Arc};
 use web_time::Instant;
 use wgpu::util::DeviceExt;
@@ -9,10 +13,6 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
-use egui::Context as EguiContext;
-use egui_winit::State as EguiState;
-use egui_wgpu::Renderer as EguiRenderer;
-use egui_wgpu::RendererOptions;
 
 #[derive(Default)]
 struct App {
@@ -54,7 +54,7 @@ struct Uniforms {
     t_max: f32,
     max_step: u32,
     bend_strength_coef: f32,
-    light_up_coef: f32,
+    exposure_coef: f32,
 }
 
 impl ApplicationHandler for App {
@@ -62,7 +62,7 @@ impl ApplicationHandler for App {
         if self.window.is_some() {
             return;
         }
-        
+
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes().with_title("wgpu raymarching"))
@@ -70,7 +70,7 @@ impl ApplicationHandler for App {
         );
 
         let state = pollster::block_on(State::new(Arc::clone(&window)));
-        
+
         let egui_state = EguiState::new(
             self.egui_ctx.clone(),
             egui::ViewportId::ROOT,
@@ -80,8 +80,24 @@ impl ApplicationHandler for App {
             None,
         );
 
+        let egui_ctx = egui::Context::default();
+        let mut fonts = egui::FontDefinitions::default();
+        fonts.font_data.insert(
+            "font_ja".to_owned(),
+            Arc::from(egui::FontData::from_owned(
+                include_bytes!("../../../common/NotoSansJP-VariableFont_wght.ttf").to_vec(),
+            )),
+        );
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "font_ja".to_owned());
+        egui_ctx.set_fonts(fonts);
+
         self.window = Some(window);
         self.state = Some(state);
+        self.egui_ctx = egui_ctx;
         self.egui_state = Some(egui_state);
     }
 
@@ -90,10 +106,9 @@ impl ApplicationHandler for App {
             let response = egui_state.on_window_event(self.window.as_ref().unwrap(), &event);
             if response.consumed {
                 return;
-            }    
+            }
         }
-        
-        
+
         match event {
             WindowEvent::Resized(size) => {
                 if let Some(state) = &mut self.state {
@@ -107,28 +122,36 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                if let (Some(state),Some(egui_state), Some(window)) = (&mut self.state, &mut self.egui_state, &self.window) {
+                if let (Some(state), Some(egui_state), Some(window)) =
+                    (&mut self.state, &mut self.egui_state, &self.window)
+                {
                     let raw_input = egui_state.take_egui_input(window);
                     self.egui_ctx.begin_pass(raw_input);
 
                     egui::Window::new("Configs").show(&self.egui_ctx, |ui| {
-                        ui.label("Max dt");
+                        ui.label("最大刻み間隔");
                         ui.add(egui::Slider::new(&mut state.uniforms.max_dt, 0.01..=5.0));
-                        
-                        ui.label("Min dt");
+
+                        ui.label("最小刻み間隔");
                         ui.add(egui::Slider::new(&mut state.uniforms.min_dt, 0.0001..=3.0));
-                        
-                        ui.label("Max travel distance of ray");
+
+                        ui.label("レイの最大移動距離");
                         ui.add(egui::Slider::new(&mut state.uniforms.t_max, 512.0..=2048.0));
-                        
-                        ui.label("Max steps of marching");
+
+                        ui.label("マーチングの最大ステップ数");
                         ui.add(egui::Slider::new(&mut state.uniforms.max_step, 32..=512));
-                        
-                        ui.label("Bend strength coef");
-                        ui.add(egui::Slider::new(&mut state.uniforms.bend_strength_coef, 0.0..=100.0));
-                        
-                        ui.label("Light up coef");
-                        ui.add(egui::Slider::new(&mut state.uniforms.light_up_coef, 0.00000..=0.00100));
+
+                        ui.label("レイの曲がりの強度");
+                        ui.add(egui::Slider::new(
+                            &mut state.uniforms.bend_strength_coef,
+                            0.0..=100.0,
+                        ));
+
+                        ui.label("露光係数");
+                        ui.add(egui::Slider::new(
+                            &mut state.uniforms.exposure_coef,
+                            0.0..=100.0,
+                        ));
                     });
 
                     let egui_output = self.egui_ctx.end_pass();
@@ -157,7 +180,7 @@ impl ApplicationHandler for App {
                     };
 
                     state.render(&paint_jobs, &screen_descripter);
-                } 
+                }
             }
 
             WindowEvent::KeyboardInput {
@@ -295,18 +318,18 @@ impl State {
         });
 
         queue.write_texture(
-            wgpu::TexelCopyTextureInfoBase { 
-                texture: &sky_texture, 
-                mip_level: 0, 
-                origin: wgpu::Origin3d::ZERO, 
-                aspect: wgpu::TextureAspect::All, 
-            }, 
-            &img, 
+            wgpu::TexelCopyTextureInfoBase {
+                texture: &sky_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &img,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * width),
                 rows_per_image: Some(height),
-            }, 
+            },
             texture_size,
         );
 
@@ -338,12 +361,10 @@ impl State {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture { 
-                        sample_type: wgpu::TextureSampleType::Float {
-                            filterable: true,
-                        }, 
-                        view_dimension: wgpu::TextureViewDimension::D2, 
-                        multisampled: false, 
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
                     },
                     count: None,
                 },
@@ -425,11 +446,7 @@ impl State {
 
         let time = Instant::now();
 
-        let egui_renderer = EguiRenderer::new(
-            &device,
-            config.format,
-            RendererOptions::default(),
-        );
+        let egui_renderer = EguiRenderer::new(&device, config.format, RendererOptions::default());
 
         Self {
             surface,
@@ -445,18 +462,13 @@ impl State {
                 min_dt: 0.01,
                 max_dt: 0.5,
                 _pad: 0.0,
-                resolution: [
-                    size.width as f32,
-                    size.height as f32,
-                    0.0,
-                    0.0,
-                    ],
+                resolution: [size.width as f32, size.height as f32, 0.0, 0.0],
                 camera_pos: [0.0, 0.0, -30.0, 0.0],
                 camera_rot: Default::default(),
-                t_max: 1024.0, 
-                max_step: 256, 
-                bend_strength_coef: 10.0, 
-                light_up_coef: 0.0001,
+                t_max: 1024.0,
+                max_step: 256,
+                bend_strength_coef: 10.0,
+                exposure_coef: 10.0,
             },
             pressed_keys: HashSet::new(),
             egui_renderer,
@@ -477,16 +489,12 @@ impl State {
             pitch.cos() * yaw.cos(),
         ];
         // 右方向ベクトルを計算 (単位ベクトル)
-        let right = [
-            yaw.cos(),
-            0.0,
-            -yaw.sin(),
-        ];
+        let right = [yaw.cos(), 0.0, -yaw.sin()];
 
         let mut speed = 0.1;
 
         if self.pressed_keys.contains(&KeyCode::ShiftLeft) {
-            speed *= 5.0;
+            speed *= 10.0;
         }
 
         for key in &self.pressed_keys {
@@ -512,7 +520,9 @@ impl State {
                     self.uniforms.camera_pos[2] += right[2] * speed;
                 }
                 KeyCode::Space => self.uniforms.camera_pos[1] += speed,
-                KeyCode::ControlLeft | KeyCode::ControlRight => self.uniforms.camera_pos[1] -= speed,
+                KeyCode::ControlLeft | KeyCode::ControlRight => {
+                    self.uniforms.camera_pos[1] -= speed
+                }
 
                 KeyCode::ArrowUp => self.uniforms.camera_rot[1] -= 0.01,
                 KeyCode::ArrowLeft => self.uniforms.camera_rot[0] -= 0.01,
@@ -528,7 +538,11 @@ impl State {
             .write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform_data));
     }
 
-    pub fn render(&mut self, paint_jobs: &[egui::epaint::ClippedPrimitive], screen_descriptor: &egui_wgpu::ScreenDescriptor) {
+    pub fn render(
+        &mut self,
+        paint_jobs: &[egui::epaint::ClippedPrimitive],
+        screen_descriptor: &egui_wgpu::ScreenDescriptor,
+    ) {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame) => frame,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
@@ -557,10 +571,10 @@ impl State {
             });
 
         self.egui_renderer.update_buffers(
-            &self.device, 
-            &self.queue, 
-            &mut encoder, 
-            paint_jobs, 
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            paint_jobs,
             screen_descriptor,
         );
 
@@ -595,31 +609,33 @@ impl State {
         }
 
         {
-            let mut egui_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("egui Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None
-            }).forget_lifetime();
+            let mut egui_pass = encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("egui Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                    multiview_mask: None,
+                })
+                .forget_lifetime();
 
-            self.egui_renderer.render(&mut egui_pass, paint_jobs, screen_descriptor);
+            self.egui_renderer
+                .render(&mut egui_pass, paint_jobs, screen_descriptor);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
     }
 }
-
 
 impl App {
     #[allow(unused)]
