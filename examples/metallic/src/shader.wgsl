@@ -1,9 +1,6 @@
 const T_MAX: f32 = 256.0;
 const MAX_STEP: u32 = 256;
 const EPSILON: f32 = 0.001;
-const MAX_TRAIL_COUNT: u32 = 64;
-const DT: f32 = 0.1;
-const SPHERE_RADIUS: f32 = 0.1;
 
 struct Uniforms {
     time: f32, 
@@ -41,48 +38,12 @@ fn rotate_y(p: vec3f, a: f32) -> vec3f {
     return vec3f(p.x * c + p.z * s, p.y, -p.x * s + p.z * c);
 }
 
-fn smin(d1: f32, d2: f32, k: f32) -> f32 {
-    let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
-    return mix(d2, d1, h) - k * h * (1.0 - h);
-}
-
 fn sdf_sphere(p: vec3f, s: f32) -> f32 {
     return length(p) - s;
 }
 
-fn a_map(p: vec3f) -> f32 {
-    let time = uniforms.time;
-
-    let s_max = mix(sin(time), cos(time), tan(time));
-    let s_min = -mix(sin(time), cos(time), tan(time));
-
-    let current_offset = vec3f(cos(time), sin(time), smoothstep(s_min, s_max, sin(time)));
-    var final_dist = sdf_sphere(p - current_offset, SPHERE_RADIUS);
-
-    for (var i = 1u; i <= min(u32(uniforms.time*10.0), MAX_TRAIL_COUNT); i++) {
-        let past_time = time - f32(i) * DT;
-
-        let past_offset = vec3f(cos(past_time), sin(past_time), smoothstep(s_min, s_max, sin(past_time)));
-
-        // let fade = 1.0 - (f32(i) / f32(TRAIL_COUNT + 1u));
-        // let past_radius = SPHERE_RADIUS * fade;
-        let past_radius = SPHERE_RADIUS;
-
-        let past_sphere_dist = sdf_sphere(p - past_offset, past_radius);
-
-        final_dist = smin(final_dist, past_sphere_dist, 0.15);
-    } 
-
-    return final_dist;
-}
-
 fn map(p: vec3f) -> f32 {
-    let x = select(
-        -1.0,
-        1.0,
-        uniforms.time % 2 < 0.1 && uniforms.time % 2 > -0.1
-    );
-    let sphere_offset = vec3f(x, 0.0, 0.0);
+    let sphere_offset = vec3f(cos(uniforms.time)*0.5, sin(uniforms.time)*0.5, sin(uniforms.time)*0.5);
     let sphere_dist = sdf_sphere(p - sphere_offset, 1.0);
 
     return sphere_dist;
@@ -169,7 +130,7 @@ fn get_sky_color(rd: vec3f) -> vec3f {
     let light_dir = normalize(vec3f(1.0, 0.4, -1.0));
 
     // 空のグラデーション
-    let zenith_color = vec3f(0.15, 0.35, 0.75);  // 真上の濃い青
+    let zenith_color = vec3f(0.15, 0.35, 0.8);  // 真上の濃い青
     let horizon_color = vec3f(0.65, 0.78, 0.95); // 地平線付近の薄い青
     let ground_color = vec3f(0.1, 0.12, 0.15);    // 地平線より下（地面）の暗い色
 

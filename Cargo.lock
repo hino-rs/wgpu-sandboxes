@@ -2017,6 +2017,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "nebula"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "egui_plot",
+ "env_logger",
+ "image",
+ "log",
+ "pollster",
+ "rand 0.10.1",
+ "web-time",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
