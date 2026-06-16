@@ -55,6 +55,8 @@ struct Uniforms {
     max_step: u32,
     density_coef: f32,
     exposure_coef: f32,
+    absorption_coef: f32,
+    _pad2: [f32; 3],
 }
 
 impl ApplicationHandler for App {
@@ -141,7 +143,7 @@ impl ApplicationHandler for App {
                         ui.label("マーチングの最大ステップ数");
                         ui.add(egui::Slider::new(&mut state.uniforms.max_step, 32..=512));
 
-                        ui.label("ガスの密度");
+                        ui.label("ガスの密度係数");
                         ui.add(egui::Slider::new(
                             &mut state.uniforms.density_coef,
                             0.00..=1.00,
@@ -151,6 +153,12 @@ impl ApplicationHandler for App {
                         ui.add(egui::Slider::new(
                             &mut state.uniforms.exposure_coef,
                             0.0..=100.0,
+                        ));
+                        
+                        ui.label("ガスの光の吸収率係数");
+                        ui.add(egui::Slider::new(
+                            &mut state.uniforms.absorption_coef,
+                            0.00..=30.00,
                         ));
                     });
 
@@ -488,8 +496,10 @@ impl State {
                 camera_rot: Default::default(),
                 t_max: 1024.0,
                 max_step: 256,
-                density_coef: 1.0,
+                density_coef: 0.5,
                 exposure_coef: 10.0,
+                absorption_coef: 0.5,
+                _pad2: Default::default(),
             },
             pressed_keys: HashSet::new(),
             egui_renderer,

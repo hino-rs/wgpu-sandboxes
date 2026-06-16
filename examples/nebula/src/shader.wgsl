@@ -1,5 +1,47 @@
 const PI: f32 = 3.14159265359;
 const ORIGIN: vec3f = vec3f(0.0, 0.0, 0.0);
+const GAS_SIZE: f32 = 30.0;
+const GAS_COLOR: vec3f = vec3f(0.01, 0.01, 0.02);
+
+// 光源の位置と色
+const LIGHT_POS: vec3f = vec3f(0.0, 0.0, 0.0); // 中心星
+const LIGHT_COLOR: vec3f = vec3f(3.0, 2.2, 1.5); // やや温かみのある強力な星の光
+
+// ドメインワーピング（座標の歪み）の計算
+fn get_warped_coords(ip: vec3f) -> vec3f {
+    // 時間経過でうねりをアニメーションさせる
+    let time_offset = vec3f(0.0, 0.0, uniforms.time * 0.05);
+    let warp_coord = ip * 0.15 + time_offset;
+    
+    // 3Dノイズで変位ベクトルを作る (平均が0になるように -0.5 する)
+    let warp_offset = vec3f(
+        noise3d(warp_coord),
+        noise3d(warp_coord + vec3f(11.7, 23.4, 35.1)),
+        noise3d(warp_coord + vec3f(47.3, 59.2, 71.1))
+    ) - vec3f(0.5);
+
+    let dist_to_center = length(ip);
+    let base_density = max(0.0, GAS_SIZE - dist_to_center) / GAS_SIZE;
+    
+    // 星雲の境界部（base_densityが0に近い場所）ではクリッピングを防ぐため歪みを弱くする
+    let warp_strength = 10.0 * base_density;
+
+    return ip + warp_offset * warp_strength;
+}
+
+// シャドウ計算用の軽量な密度関数
+fn calc_density_shadow(ip: vec3f) -> f32 {
+    let warped_ip = get_warped_coords(ip);
+    let dist_to_center = length(warped_ip);
+    let base_density = max(0.0, GAS_SIZE - dist_to_center) / GAS_SIZE;
+
+    var noise_val = fbm3d(warped_ip * 0.25, 1u);
+    noise_val = max(0.0, noise_val - 0.25) * 1.5;
+
+    let density = base_density * noise_val;
+    return density * uniforms.density_coef;
+}
+
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4f,
@@ -18,6 +60,7 @@ struct Uniforms {
     max_steps: u32,
     density_coef: f32,
     exposure_coef: f32,
+    absorption_coef: f32,
 }
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -140,18 +183,34 @@ fn map(p: vec3f) -> f32 {
     return sphere_dist;
 }
 
-fn calc_density(ip: vec3f) -> f32 {
-    let dist_to_center = length(ip);
+// レイと球の交差判定。
+// x には侵入点(t_entry)、y には脱出点(t_exit)を返す。
+// 交差しない場合は x > y を返す。
+fn intersect_sphere(ro: vec3f, rd: vec3f, sphere_center: vec3f, sphere_radius: f32) -> vec2f {
+    let oc = ro - sphere_center;
+    let b = dot(oc, rd);
+    let c = dot(oc, oc) - sphere_radius * sphere_radius;
+    let h = b * b - c;
+    if (h < 0.0) {
+        return vec2f(-1.0, -1.0);
+    }
+    let sqrt_h = sqrt(h);
+    return vec2f(-b - sqrt_h, -b + sqrt_h);
+}
 
-    // 球の半径の内側ｈど密度を高く
-    let base_density = max(0.0, 10.0 - dist_to_center) / 10.0;
+
+fn calc_density(ip: vec3f) -> f32 {
+    let warped_ip = get_warped_coords(ip);
+    let dist_to_center = length(warped_ip);
+
+    // 球の半径の内側ほど密度を高く
+    let base_density = max(0.0, GAS_SIZE - dist_to_center) / GAS_SIZE;
 
     // 3Dノイズをサンプリング
-    var noise_val = fbm3d(ip * 0.25, 4u);
+    var noise_val = fbm3d(warped_ip * 0.25, 4u);
     noise_val = max(0.0, noise_val - 0.25) * 1.5;
 
     // ベースの球体形状とノイズを掛け算する
-    // これにより「基本は球形だけど、ノイズによって千切れたり薄くなったりするガス」が作れる
     let density = base_density * noise_val;
 
     return density * uniforms.density_coef;
@@ -169,61 +228,75 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     ray_dir = rotate_y(ray_dir, uniforms.camera_rot.x); // 左右の回転を適用
 
     var rd = normalize(ray_dir);    
-    var t = 0.0;
-    var hit = false;
+    let bounds = intersect_sphere(ro, rd, ORIGIN, GAS_SIZE);
+    let t_entry = bounds.x;
+    let t_exit = bounds.y;
 
-    var ip = ro + rd * hash21(in.uv * uniforms.time) * 0.5;
     var glow = vec3f(0.0);
+    var transmittance = 1.0;
 
-    let dt = 0.1;
+    if (t_exit > 0.0 && t_entry <= t_exit) {
+        let dt = 0.1;
+        // 開始地点を交差点(t_entry)にする。ただしカメラがすでに球の内部にいる場合は0.0にする。
+        // カラーバンディングを防ぐためにジッターを追加。
+        let t_start = max(0.0, t_entry) + hash21(in.uv * uniforms.time) * dt;
+        var t = t_start;
+        let t_end = min(uniforms.t_max, t_exit);
 
-    var dist_to_center: f32;
-
-    var transmittance = 1.0; // 光の通る割合
-
-    for (var i = 0u; i < uniforms.max_steps; i++) {
-        ip = ro + rd * t;
-
-        let density = calc_density(ip);
-        
-        if (density > 0.0) {
-            // 光がどれくらい遮られたか
-            let absorption = density * dt * 0.5;
-
-            // 透過率を減衰させる
-            transmittance *= (1.0 - absorption);
+        for (var i = 0u; i < uniforms.max_steps; i++) {
+            let ip = ro + rd * t;
+            let density = calc_density(ip);
             
-            // この地点のガスが放つ光の強さを計算
-            // ガス自身の基本色（例: 青） × 密度 × ステップ幅
-            let step_color = vec3f(0.0, 0.8, 0.95) * density * dt;
-
-            // 「手前にあるガス」に遮られた後の光だけがカメラに届くため、
-            // 現在の透過率 (transmittance) を掛けてから glow に加算する
-            glow += step_color * transmittance;
-        }
-
-
-        // let res = map(ip);
-
-        // if (res < 0.01) {
-        //     hit = true;
-        //     break;
-        // }
-
-        if (transmittance < 0.001) {
-            break;
-        }
-
-        t += dt;
-        if (t > uniforms.t_max) {
-            break;
+            if (density > 0.0) {
+                // 1. 光源への方向と距離を計算
+                let light_vec = LIGHT_POS - ip;
+                let dist_to_light = length(light_vec);
+                let light_dir = normalize(light_vec);
+                // 2. シャドウレイのマーチング (光源に向かって進む)
+                var shadow_t = 0.0;
+                let shadow_steps = 4u; // パフォーマンスのため少ないステップ数で走査
+                let shadow_dt = dist_to_light / f32(shadow_steps);
+                var shadow_density_sum = 0.0;
+                for (var j = 0u; j < shadow_steps; j++) {
+                    let shadow_ip = ip + light_dir * shadow_t;
+                    shadow_density_sum += calc_density_shadow(shadow_ip);
+                    shadow_t += shadow_dt;
+                }
+                // 3. ビールの法則 (Beer's Law) に従う光源からの透過率
+                let light_transmittance = exp(-shadow_density_sum * shadow_dt * uniforms.absorption_coef);
+                // 4. 位相関数 (Henyey-Greenstein) の適用
+                let g = 0.6; // 前方散乱パラメータ
+                let phase = henyey_greenstein(rd, -light_dir, g);
+                // 5. カメラへの蓄積光の更新
+                let absorption = density * dt * uniforms.absorption_coef;
+                transmittance *= (1.0 - absorption);
+                // ガス自身の固有カラー
+                var gas_color = GAS_COLOR;
+                gas_color.r += absorption * 0.5;
+                gas_color.b += transmittance * 0.2;
+                // 「光源からの散乱光」と「ガス自身の発光(emission)」をブレンド
+                let scattered_light = LIGHT_COLOR * light_transmittance * phase * density * dt;
+                let emission = gas_color * density * dt;
+                // 蓄積光に反映
+                glow += (scattered_light + emission) * transmittance;
+            }
+            if (transmittance < 0.001) {
+                break;
+            }
+            t += dt;
+            if (t > t_end) {
+                break;
+            }
         }
     }
 
     var color = vec3f(0.0);
     let u = 0.5 + atan2(rd.z, rd.x) / (2.0 * PI);
     let v = 0.5 - asin(rd.y) / PI;
-    let sky_color = textureSampleLevel(sky_texture, sky_sampler, vec2f(u, v), 0.0);
+    var sky_color = textureSampleLevel(sky_texture, sky_sampler, vec2f(u, v), 0.0);
+    sky_color.r += 0.001;
+    sky_color.g += 0.003;
+    sky_color.b += 0.003;
     color = sky_color.rgb * transmittance + glow;
 
         // // 3Dノイズを交差点ip（3次元空間座標）を使ってサンプリング
