@@ -2976,6 +2976,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "reflected_light"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "egui",
+ "egui-wgpu",
+ "egui_plot",
+ "env_logger",
+ "image",
+ "log",
+ "pollster",
+ "rand 0.10.1",
+ "web-time",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "regex"
 version = "1.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
