@@ -1,0 +1,6 @@
+[package]
+name = "shoot"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

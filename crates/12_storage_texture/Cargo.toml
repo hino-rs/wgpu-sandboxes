@@ -1,0 +1,14 @@
+[package]
+name = "storage_texture"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wgpu.workspace = true
+bytemuck.workspace = true
+winit.workspace = true
+env_logger.workspace = true
+log.workspace = true
+pollster.workspace = true
+glam.workspace = true
+web-time.workspace = true
