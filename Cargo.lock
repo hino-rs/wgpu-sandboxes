@@ -1929,6 +1929,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimum_raymarching"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "env_logger",
+ "glam",
+ "log",
+ "pollster",
+ "web-time",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

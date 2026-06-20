@@ -39,6 +39,9 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var ndc = uv.xy - vec2f(0.5);
     ndc *= 2.0;
 
+    let aspect = uniforms.resolution.x / uniforms.resolution.y;
+    ndc.x *= aspect;
+
     // --- 1. 前フレームの情報の読み込み ---
     // textureLoad を使うと、サンプラーなしでピクセル座標 (coords) を指定して
     // 前フレームのテクスチャから直接カラー値をロードできます。
@@ -55,7 +58,7 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // --- 3. 新しい円の位置を計算 ---
     // 時間（uniforms.time）を用いて、円の中心座標を「8の字」軌道で動かします。
-    let circle_x = sin(uniforms.time * 2.0) * 0.6;
+    let circle_x = sin(uniforms.time * 2.0) * 0.6 * aspect;
     let circle_y = cos(uniforms.time * 1.2) * 0.4;
     let circle_center = vec2f(circle_x, circle_y);
 
@@ -82,32 +85,8 @@ fn cs_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     textureStore(current_frame, coords, final_color);
 }
 
-// --- レンダー（描画）シェーダ ---
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-};
 
-// 頂点シェーダ：画面全体を覆う三角形を動的に生成
-@vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-    var out: VertexOutput;
-    let uv = vec2<f32>(
-        f32((in_vertex_index << 1u) & 2u),
-        f32(in_vertex_index & 2u)
-    );
-    out.position = vec4<f32>(uv * 2.0 - 1.0, 0.0, 1.0);
-    // テクスチャマッピング用にY軸を反転
-    out.uv = vec2<f32>(uv.x, 1.0 - uv.y);
-    return out;
-}
-
-// フラグメントシェーダ用バインディング
-// レンダリング時は、最新フレームが書き込まれたテクスチャをサンプリングして画面に出力します。
-@group(0) @binding(0) var input_texture: texture_2d<f32>;
-@group(0) @binding(1) var texture_sampler: sampler;
-
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(input_texture, texture_sampler, in.uv);
-}
+struct VertexOutput { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32>, };
+@vertex fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {var out: VertexOutput;let uv = vec2<f32>(f32((in_vertex_index << 1u) & 2u),f32(in_vertex_index & 2u));out.position = vec4<f32>(uv * 2.0 - 1.0, 0.0, 1.0);out.uv = vec2<f32>(uv.x, 1.0 - uv.y);return out;}
+@group(0) @binding(0) var input_texture: texture_2d<f32>; @group(0) @binding(1) var texture_sampler: sampler;
+@fragment fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> { return textureSample(input_texture, texture_sampler, in.uv); }
